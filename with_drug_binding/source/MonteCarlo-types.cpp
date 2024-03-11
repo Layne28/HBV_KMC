@@ -316,7 +316,7 @@ int attempt_add_monomer_dimer(Geometry &g, int heid0, gsl_rng *r) //!!! Should u
             int etypexid = g.he[g.heidtoindex[xid]].type;
             // SELECTED TYPES
 
-            if ((etypeheid0 == 2) && ((etypexid == 0) || (etypexid == 3)))
+           /* if ((etypeheid0 == 2) && ((etypexid == 0) || (etypexid == 3)))
             {
                 etypenew = 1;
             }
@@ -346,7 +346,8 @@ int attempt_add_monomer_dimer(Geometry &g, int heid0, gsl_rng *r) //!!! Should u
             else
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
-            }
+            }*/
+	    etypenew=gsl_rng_uniform_int(r, 4);
             double e1 = g.bend_energy(heindex0) + g.bend_energy(xidindex);
             // TYPES BASED ON Concentration
             /*if (gsl_rng_uniform(r) < g.cdProb) {
@@ -552,7 +553,7 @@ int attempt_add_monomer_dimer(Geometry &g, int heid0, gsl_rng *r) //!!! Should u
             //BASED on types
 
             //get_monomer_etype(etypexid,etypeheid0,etypenew)
-            if ((etypexid == 2) && ((etypeheid0 == 0) || (etypeheid0 == 3)))
+           /* if ((etypexid == 2) && ((etypeheid0 == 0) || (etypeheid0 == 3)))
             {
                 etypenew = 1;
             }
@@ -582,7 +583,8 @@ int attempt_add_monomer_dimer(Geometry &g, int heid0, gsl_rng *r) //!!! Should u
             else
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
-            }
+            }*/
+	    etypenew=gsl_rng_uniform_int(r, 4);
             /* if (gsl_rng_uniform(r) < g.cdProb) {
                     if (gsl_rng_uniform(r) < 0.5) {etypenew=0;}
                     else {etypenew=3; }
@@ -4402,7 +4404,7 @@ int force_add_monomer_with_next(Geometry &g, int heid0, int xid, gsl_rng *r)
             int etypexid = g.he[g.heidtoindex[xid]].type;
             // SELECTED TYPES
 
-            if ((etypeheid0 == 2) && ((etypexid == 0) || (etypexid == 3)))
+            /*if ((etypeheid0 == 2) && ((etypexid == 0) || (etypexid == 3)))
             {
                 etypenew = 1;
             }
@@ -4432,7 +4434,8 @@ int force_add_monomer_with_next(Geometry &g, int heid0, int xid, gsl_rng *r)
             else
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
-            }
+            }*/
+		etypenew=gsl_rng_uniform_int(r, 4);
             // TYPES BASED ON Concentration
             /*if (gsl_rng_uniform(r) < g.cdProb) {
                     if (gsl_rng_uniform(r) < 0.5) {etypenew=0;}

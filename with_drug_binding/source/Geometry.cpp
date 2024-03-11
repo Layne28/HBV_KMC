@@ -118,7 +118,7 @@ void Geometry::initialize(int Ntype0)
 
 	xi=0;
 
-	lenpoints=200000;
+	lenpoints=20000000;
 	dist_points = new double *[lenpoints];
 
 	for (int i = 0; i < lenpoints; i++)
@@ -159,7 +159,7 @@ void Geometry::initialize(int Ntype0)
 		}
 	}
 
-	for (int i = 0; i < 1000000; i++)
+	for (int i = 0; i < 10000000; i++)
 	{
 		vidtoindex[i] = -1;
 		heidtoindex[i] = -1;
@@ -3107,19 +3107,19 @@ double Geometry::find_dg(int type, int typenext, bool drug)
                 exit(-1);
         }*/
 
-        double bindg = gb[type][typenext];
+/*        double bindg = gb[type][typenext];
 
         if (((typenext == 0) || (typenext == 3)) && ((type == 0) || (type == 3))) {
         bindg +=  2*mudrug * drug;
         }
         else if (((typenext == 0) || (typenext == 3)) && ((type == 1) || (type == 2))) {
         bindg += mudrug * drug;
-        }
+        }*/
 
 
 
 
-	//double bindg = gb[type][typenext] + drug * (gdrug[type][typenext] - mudrug);
+	double bindg = gb[type][typenext] + drug * (gdrug[type][typenext]-mudrug);
 	/*if (((typenext == 0) || (typenext == 3)) && ((type == 0) || (type == 3))) {
 		bindg +=  2*(gdrug-mudrug) * drug;
 	}
@@ -3488,7 +3488,7 @@ double Geometry::dimer_bend_energy(int heindex0)
 
 	double kPhi = kappaPhi[phitype];
 	//if (he[nextindex].din==1) kPhi*=10;
-	if (phi < phi0[phitype])
+	if ((is_boundary(he[heindex0].id)>0) && (phi < phi0[phitype]))
 	{
 		kPhi /= 5;
 	}

@@ -47,7 +47,7 @@ struct HE
 
 struct VTX
 {
-	int vid;		  // id of this vertex
+	long long int vid;		  // id of this vertex
 	double co[3];	  // xyz coordinates of this vertex
 	vector<int> hein; // vector of halfedges entering this vertex
 	//int fusion_vid;

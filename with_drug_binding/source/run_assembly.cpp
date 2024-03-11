@@ -60,7 +60,7 @@ int main(int argc, char **argv)
     g.kappaPhi[3] = Phikappa; //with drug
     g.theta0[0] = atof(argv[5]);
     g.theta0[1] = atof(argv[6]);
-    g.theta0[2] = g.theta0[0]; //0.1;  // CD-CD
+    g.theta0[2] = g.theta0[1]; //0.1;  // CD-CD
     g.theta0[3] = g.theta0[0]; //0.1 ; //349 ;
 
     g.gb0 = atof(argv[7]);
@@ -133,18 +133,31 @@ int main(int argc, char **argv)
         }
     }
 
-    for (int i = 0; i < g.Ntype; i++)
+ for (int i = 0; i < g.Ntype; i++)
     {
         for (int j = 0; j < g.Ntype; j++)
         {
-
-            if (j == 3 || j == 0)
-                g.gdrug[i][j] = gdrug0;
+            if( i == 0 && j == 0)
+                g.gdrug[i][j] = 0.6*g.gb0;
             else
                 g.gdrug[i][j] = 0;
         }
     }
 
+
+    for (int i = 0; i < g.Ntype; i++)
+    {
+        for (int j = 0; j < g.Ntype; j++)
+        {
+	 if(i==0){
+            if( j == 0)
+                g.gdrug[i][j] = 1.0*g.gb0;}
+	if(i==3){
+		if(j==3)
+			g.gdrug[i][j]= 1.0*g.gb0;}
+        }
+    }
+    //g.gdrug[3][3]=0;
     long unsigned int sweep = 0;
 
     g.l0[0] = 1.05;
@@ -865,7 +878,7 @@ int main(int argc, char **argv)
             ee = g.compute_energy();
 
             ////dump_lammps_traj(g, int(sweep));
-            dump_lammps_traj_dimers(g, sweep);
+           dump_lammps_traj_dimers(g, sweep);
 
             time(&timer2);
             seconds = difftime(timer2, timer1);
@@ -916,6 +929,7 @@ int main(int argc, char **argv)
             cout << "#########  Acceptance vmove " << (1.0 * g.accepted_vmove) / (1.0 * (g.accepted_vmove + g.rejected_vmove)) << "#################" << endl;
             cout << "#########  Nvlast " << g.Nvlast << " Nhelast " << g.Nhelast << " ################" << endl;
             cout << "#########  T4 " << g.NCD_T4_in << " T3 " << g.NCD_T3_in << " ################" << endl;
+	    cout << "#########  NCD_Hex" << g.NCD_Hex << "#################"<<endl;
             cout << "#########  avgAddInterval "<<avgAddInterval<<" ###############"<<endl;
         }
         /*int boundaryvsize = g.boundaryv.size();
@@ -984,7 +998,7 @@ int main(int argc, char **argv)
                     {
                //         cout << "STOP for now - mixed morph" << endl;
                         g.update_boundary();
-                        //dump_lammps_traj_dimers(g, int(sweep));
+                        dump_lammps_traj_dimers(g, int(sweep));
                         dump_lammps_data_dimers(g, 44444444);
                         dump_lammps_data_dimers(g, 11111111);
                         time(&timer2);
@@ -1008,7 +1022,7 @@ int main(int argc, char **argv)
                     time(&timer2);
                     seconds = difftime(timer2, timer1);
                     dump_analysis(g, ofile, sweep, seed, seconds);
-                    exit(-1);
+                  //  exit(-1);
                 }
                 lastNheGrowth = g.Nhe;
 
@@ -1023,7 +1037,7 @@ int main(int argc, char **argv)
 
             fprintf(stderr, "STOP for now - too long\n");
             g.update_boundary();
-            //dump_lammps_traj_dimers(g, int(sweep));
+            dump_lammps_traj_dimers(g, int(sweep));
             //dump_lammps_traj_restart(g, int(sweep));
             dump_lammps_data_dimers(g, 77777777);
             dump_restart_lammps_data_file(g, sweep);
@@ -1038,7 +1052,7 @@ int main(int argc, char **argv)
 
            // fprintf(stderr, "STOP for now - too large\n");
             g.update_boundary();
-            //dump_lammps_traj_dimers(g, int(sweep));
+            dump_lammps_traj_dimers(g, int(sweep));
             dump_lammps_data_dimers(g, 88888888);
             dump_lammps_data_dimers(g, 11111111);
             dump_restart_lammps_data_file(g, sweep);
@@ -1050,7 +1064,7 @@ int main(int argc, char **argv)
         sweep++;
     }
     //dump_lammps_traj_restart(g, int(sweep));
-    //dump_lammps_traj_dimers(g, int(sweep));
+    dump_lammps_traj_dimers(g, int(sweep));
 
     //if (g.Nboundary == 1)
     dump_restart_lammps_data_file(g, sweep);
@@ -1071,7 +1085,7 @@ int main(int argc, char **argv)
         if (sweep % freq_vis == 0)
         {
 
-            //dump_lammps_traj_dimers(g, int(sweep));
+            dump_lammps_traj_dimers(g, int(sweep));
         }
         if (sweep % freq_out == 0)
         {
@@ -1096,7 +1110,7 @@ int main(int argc, char **argv)
         sweep++;
     }
 
-    //dump_lammps_traj_dimers(g, frame++);
+    dump_lammps_traj_dimers(g, frame++);
     dump_lammps_data_file(g, 22222222);
     dump_lammps_data_dimers(g, 11111111);
     dump_restart_lammps_data_file(g, sweep);
@@ -1134,6 +1148,7 @@ int main(int argc, char **argv)
     cout << "#########  ALL NEIGH " << g.all_neigh << " ##############" << endl;
     cout << "#########  Nboundary " << g.Nboundary << " ##############" << endl;
     cout << "#########  Bound Triangle " << boundtri << " ##############" << endl;
+    cout << "#########  NCD_Hex" << g.NCD_Hex << "#################"<<endl;
 
     time(&timer2);
     seconds = difftime(timer2, timer1);
