@@ -1,8 +1,9 @@
+GSL_HOME=/opt/homebrew/Cellar/gsl/2.7.1
 CC = g++
 DEBUG = #-g 
 GSLINC=-I$(GSL_HOME)/include
 GSL=-L$(GSL_HOME)/lib
-CFLAGS = -Wall $(DEBUG) -O3 -ffast-math -funroll-loops
+CFLAGS = -Wall $(DEBUG) $(GSLINC) -O3 -ffast-math -funroll-loops
 LFLAGS = -Wall $(DEBUG) $(GSL) -lgsl -lgslcblas -lm
 
 

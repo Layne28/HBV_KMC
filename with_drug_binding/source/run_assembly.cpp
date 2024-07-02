@@ -17,13 +17,15 @@ int main(int argc, char **argv)
     time(&timer1);
 
     if (argc != 21)
+    //making sure all arguments are given to the run assembly file
     {
         fprintf(stderr, "%d", argc);
         fprintf(stderr, "usage: ./assemble seed epsilon0 kappa0 kappaPhi0 theta0 theta1 LnK muCd ks0 dmu dummydg mudrug gdrug kd0 dg12 dg01 dg20 dg33 dg00 dgother\n");
         exit(-1);
     }
 
-    int minHE_update_neigh = 150;
+    int minHE_update_neigh = 150; //Q: maximum number of HE?
+
     int lastNhe = 0;
     int lastNheGrowth=0;
     int npace=0;
@@ -40,46 +42,47 @@ int main(int argc, char **argv)
     cout << "HERE " << endl;
     //const double pi = 4*atan(1);
     Geometry g;
-    g.initialize(4);
-    g.all_neigh = 0;
+    //Initialize the geometry
+    g.initialize(4);//specifying the number of different dimer types: AB,BA,CD,DC
+    g.all_neigh = 0;//Q:all neighbor to a vertex?
 
     
 
-    g.epsilon[0] = atof(argv[2]);
+    g.epsilon[0] = atof(argv[2]);//dimer length spring constant
     g.epsilon[1] = g.epsilon[0];
     g.epsilon[2] = g.epsilon[0];
     g.epsilon[3] = g.epsilon[0];
     g.kappa[0] = atof(argv[3]);
-    g.kappa[1] = g.kappa[0];
+    g.kappa[1] = g.kappa[0];//binding angle spring constant
     g.kappa[2] = g.kappa[0];
     g.kappa[3] = g.kappa[0];
-    double Phikappa = atof(argv[4]);
+    double Phikappa = atof(argv[4]);//dihedral angle spring constant
     g.kappaPhi[0] = Phikappa; // CD-CD DC-DC and all other
     g.kappaPhi[1] = Phikappa; //BA-AB
     g.kappaPhi[2] = Phikappa; //AB-CD and AB-DC
     g.kappaPhi[3] = Phikappa; //with drug
-    g.theta0[0] = atof(argv[5]);
-    g.theta0[1] = atof(argv[6]);
+    g.theta0[0] = atof(argv[5]); //dihedral angle for CD
+    g.theta0[1] = atof(argv[6]);//dihedral angle for AB
     g.theta0[2] = g.theta0[1]; //0.1;  // CD-CD
     g.theta0[3] = g.theta0[0]; //0.1 ; //349 ;
 
-    g.gb0 = atof(argv[7]);
+    g.gb0 = atof(argv[7]);//binding affinity for DC-DC binding affinity (This one is essential for T4 capsid
 
     /* MU parameters */
-    double dmu = atof(argv[10]);
-    g.mu[0] = atof(argv[8]);
-    g.mu[3] = g.mu[0];
-    g.mu[1] = g.mu[0] + dmu;
-    g.mu[2] = g.mu[1];
+    double dmu = atof(argv[10]);//conformational free energy, decides concentration difference between AB and CD dimers
+    g.mu[0] = atof(argv[8]);//CD dimer concentration
+    g.mu[3] = g.mu[0];//DC dimer concentration
+    g.mu[1] = g.mu[0] + dmu;//AB dimer concentration
+    g.mu[2] = g.mu[1];//BA dimer concentration
+    //AB dimer conc < CD dimer conc
+    double ks0 = atof(argv[9]);//rate constant for dimer addition
 
-    double ks0 = atof(argv[9]);
-
-    g.dg = atof(argv[11]);
+    g.dg = atof(argv[11]);// not a useful variable
 
     /* Drug parameteres */
-    g.mudrug = atof(argv[12]);
-    double gdrug0 = atof(argv[13]);
-    double kd0 = atof(argv[14]);
+    g.mudrug = atof(argv[12]);//currently a bath of drug
+    double gdrug0 = atof(argv[13]);//drug-dimer binding affinity
+    double kd0 = atof(argv[14]);//drug-dimer binding rate
 
 
     // gaussian
@@ -97,7 +100,7 @@ int main(int argc, char **argv)
     cout << "gaussian sigma " << g.gaussian_sigma <<endl;
     //exit(-1);
 
-    /* GB parameteres */
+    /* GB parameteres binding affinity parameters*/
     double dg12 = atof(argv[15]); //BA-AB
     double dg01 = atof(argv[16]); //CD-BA
     double dg20 = atof(argv[17]); //AB-CD
@@ -144,17 +147,17 @@ int main(int argc, char **argv)
         }
     }
 
-
+    double gdd=1.0;
     for (int i = 0; i < g.Ntype; i++)
     {
         for (int j = 0; j < g.Ntype; j++)
         {
 	 if(i==0){
             if( j == 0)
-                g.gdrug[i][j] = 1.0*g.gb0;}
+                g.gdrug[i][j] = gdd*g.gb0;}
 	if(i==3){
 		if(j==3)
-			g.gdrug[i][j]= 1.0*g.gb0;}
+			g.gdrug[i][j]= gdd*g.gb0;}
         }
     }
     //g.gdrug[3][3]=0;
@@ -316,15 +319,10 @@ int main(int argc, char **argv)
 
     {
 
-        //move all vertices
-
-       //move_vertex(g, r);
-
-        //g.check_odd_neigh();
-
-        //change edge type
 
         if (g.Nhe==6){
+            //attempt: change edge type when starting from a trimer of dimers
+
             ind = gsl_rng_uniform_int(r, g.boundary.size());
                 //cout <<"ind id" << ind<<endl;
             int hh = g.boundary[ind];
@@ -335,6 +333,7 @@ int main(int argc, char **argv)
         else{
             for (int nc = 0; nc < g.Nhe/2; nc++)
             {
+                //attempt edge type fo r random halfedges
                 int ind1 = gsl_rng_uniform_int(r, g.Nhe);
                 int e1 = g.he[ind1].id;
                 int x = -1;
@@ -344,13 +343,8 @@ int main(int argc, char **argv)
             }
         }
 
-    
-       
-        // attempt add monomer_dimer
-        
-        //if (g.Nhe>6)
-        //{
-            ps_attempt = ks0 * g.Nsurf;
+        /*attempt dimer addition moves with attempt rate constant ks0 */ 
+           ps_attempt = ks0 * g.Nsurf;
             if (gsl_rng_uniform(r) < ps_attempt)
             {
                 ind = gsl_rng_uniform_int(r, g.boundary.size());
@@ -366,34 +360,16 @@ int main(int argc, char **argv)
                     g.update_boundary();
                 }
             }
-        /*}
-        else {
-                ind = gsl_rng_uniform_int(r, g.boundary.size());
-                e = g.boundary[ind];
-                ssadd = attempt_add_monomer_dimer(g, e, r);
-                if (ssadd > 1)
-                    dimeradded++;
-                else if (ssadd > 0)
-                    monomeradded++;
-                ssadd = -1;
-                g.update_boundary();
-        }*/
-        
-
-        //double ps_move = ks0 * g.Nv ;
-        //if (gsl_rng_uniform(r) < ps_move)
-        //{
+  
         move_vertex(g, r);
-        //}
+
 
 
         if (g.Nhe>6) {
 
 
             
-
-
-            //remove monomer dimer
+            /*attempt dimer removal move with rate ks0*/
             ps_attempt = ks0 * g.Nsurf;
             if (gsl_rng_uniform(r) < ps_attempt)
             {
@@ -427,7 +403,6 @@ int main(int argc, char **argv)
                 else 
                 {
                     //bind wedge
-                    //if (gsl_rng_uniform(r) < pb_attempt){
                     ind = gsl_rng_uniform_int(r, g.boundary.size());
                     int hh = g.boundary[ind];
                     int tt = -1;
@@ -442,13 +417,12 @@ int main(int argc, char **argv)
 
 
                     //unbind wedge
-                    if (g.boundaryvbond.size() > 0) // &&  gsl_rng_uniform(r) < pb_attempt)
+                    if (g.boundaryvbond.size() > 0) 
                     {
                         ind = gsl_rng_uniform_int(r, g.boundary.size());
                         int hh = g.boundary[ind];
                         if ((g.is_bond_in_boundary(hh) > 0) || (g.is_bond_out_boundary(hh) > 0))
                         {
-                            //cout <<" trying unbind vv is " << vv <<endl;
                             int tt = attempt_unbind_wedge_dimer(g, hh, r);
                             if (tt > 0)
                                 unbinding++;
@@ -468,10 +442,6 @@ int main(int argc, char **argv)
                             //wedge fusion
                             if (g.all_neigh > 0 )
                             {
-                            //double kf0=1;
-                            //double pf_attempt=kf0*g.Nsurf;
-                            //if (gsl_rng_uniform(r) < pf_attempt)
-                            //{
                             int ff = attempt_wedge_fusion(g, r);
                             g.update_boundary();
                             if (ff > 0)
@@ -484,20 +454,17 @@ int main(int argc, char **argv)
                         case 1:
                             //wedge fission
                             {
-                                //pf_attempt=kf0; //g.Nsurf
-                                //if (gsl_rng_uniform(r) < pf_attempt)
-                                //{
+                                
                                 int ff = attempt_wedge_fission(g, r);
                                 g.update_boundary();
                                 if (ff > 0)
                                     wedgefission++;
                                 ff = 0;
-                                //}
                             }
                             break;
 
                         case 2:
-                            //fusion
+
                             if (g.all_neigh > 0 )
                             {
                                 //double kf0=1;
@@ -536,281 +503,6 @@ int main(int argc, char **argv)
 
             }
         }
-        // attempt add monomer_dimer
-        //case 3:
-            /*
-            if (g.Nhe>6)
-            {
-                ps_attempt = ks0 * g.Nsurf;
-            if (gsl_rng_uniform(r) < ps_attempt)
-            {
-                ind = gsl_rng_uniform_int(r, g.boundary.size());
-                e = g.boundary[ind];
-                if (g.check_inside_overlap(e) > 0)
-                {
-                    ssadd = attempt_add_monomer_dimer(g, e, r);
-                    if (ssadd > 1)
-                        dimeradded++;
-                    else if (ssadd > 0)
-                        monomeradded++;
-                    ssadd = -1;
-                    g.update_boundary();
-                }
-            }
-            }
-            else {
-                ind = gsl_rng_uniform_int(r, g.boundary.size());
-                e = g.boundary[ind];
-                ssadd = attempt_add_monomer_dimer(g, e, r);
-                if (ssadd > 1)
-                    dimeradded++;
-                else if (ssadd > 0)
-                    monomeradded++;
-                ssadd = -1;
-                g.update_boundary();
-            }
-        //    break;
-
-        double ps_move = ks0 * g.Nhe ;
-        if (gsl_rng_uniform(r) < ps_move)
-        {
-            move_vertex(g, r);
-        }
-        */
-        //if (g.Nhe>6){
-
-       /*for (int ii=0; ii<10;ii++)
-        {
-        int movetype = gsl_rng_uniform_int(r, 10);
-        //cout <<"try moves"<<endl;
-        //if (g.boundary.size() <= 3 && sweep > 10000 && g.Nhe > 10)
-        //    movetype = -1;
-        switch (movetype)
-        {
-        //attempt bind wedge
-        case 0:
-            if (g.Nhe > 15) // &&  gsl_rng_uniform(r) < pb_attempt)
-            {
-                ind = gsl_rng_uniform_int(r, g.boundary.size());
-                //cout <<"ind id" << ind<<endl;
-                int hh = g.boundary[ind];
-                int tt = -1;
-                if (g.no_bond_boundary(hh) > 0)
-                {
-                    tt = attempt_bind_wedge_dimer(g, hh, r);
-                    if (tt > 0)
-                        binding++;
-                    tt = -1;
-                }
-                g.update_boundary();
-            }
-            break;
-
-        //attempt unbind wedge
-        case 1:
-            if (g.boundaryvbond.size() > 0) // &&  gsl_rng_uniform(r) < pb_attempt)
-            {
-                ind = gsl_rng_uniform_int(r, g.boundary.size());
-                int hh = g.boundary[ind];
-                if ((g.is_bond_in_boundary(hh) > 0) || (g.is_bond_out_boundary(hh) > 0))
-                {
-                    //cout <<" trying unbind vv is " << vv <<endl;
-                    int tt = attempt_unbind_wedge_dimer(g, hh, r);
-                    if (tt > 0)
-                        unbinding++;
-                    tt = -1;
-                    g.update_boundary();
-                }
-            }
-            break;
-
-        // attempt remove monomer_dimer
-        case 2:
-
-            ps_attempt = ks0 * g.Nsurf ;
-            if (gsl_rng_uniform(r) < ps_attempt)
-            {
-                if (sweep > 0 && g.Nhe > 6)
-                {
-                    ind = gsl_rng_uniform_int(r, g.boundary.size());
-                    e = g.boundary[ind];
-                    if (g.no_bond_boundary(e) > 0)
-                    {
-                        ss = attempt_remove_monomer_dimer(g, e, r);
-                        if (ss > 1)
-                            dimerremoved++;
-                        else if (ss > 0)
-                            monomerremoved++;
-                        ss = 0;
-                        g.update_boundary();
-                    }
-                }
-            }
-            break;
-
-        
-
-        //attempt wedge fusion
-        case 3:
-            if (g.all_neigh > 0 && g.Nhe > minhe_fission && g.Nsurf > 3)
-            {
-                //double kf0=1;
-                //double pf_attempt=kf0;//g.Nsurf;
-                //if (gsl_rng_uniform(r) < pf_attempt)
-                //{
-                int ff = attempt_wedge_fusion(g, r);
-                g.update_boundary();
-                if (ff > 0)
-                    wedgefusion++;
-                ff = 0;
-                //}
-            }
-            break;
-
-        // attempt_wedge fission
-        case 4:
-            if (g.all_neigh > 0 && g.Nhe > minhe_fission && g.Nsurf > 3)
-            {
-                //pf_attempt=kf0; //g.Nsurf
-                //if (gsl_rng_uniform(r) < pf_attempt)
-                //{
-                int ff = attempt_wedge_fission(g, r);
-                g.update_boundary();
-                if (ff > 0)
-                    wedgefission++;
-                ff = 0;
-                //}
-            }
-            break;
-
-        //attempt fusion  with kg0=1
-        case 5:
-            if (g.all_neigh > 0 && g.Nhe > minhe_fission && g.Nsurf > 3)
-            {
-                //double kf0=1;
-                //double pf_attempt=kf0;//g.Nsurf;
-                //if (gsl_rng_uniform(r) < pf_attempt)
-                //{
-                int ff = attempt_fusion(g, r);
-                g.update_boundary();
-                if (ff > 0)
-                    fusion++;
-                ff = 0;
-            }
-            break;
-
-        //attempt fission
-        case 6:
-            if (g.all_neigh > 0 && g.Nhe > minhe_fission && g.Nsurf > 3)
-            {
-                //pf_attempt=kf0*.25; //g.Nsurf
-                //if (gsl_rng_uniform(r) < pf_attempt)
-                //{
-                int ff = attempt_fission(g, r);
-                g.update_boundary();
-                if (ff > 0)
-                    fission++;
-                ff = 0;
-                //}
-            }
-            break;
-        
-
-        case 7:
-            move_vertex(g, r);
-            break;
-
-
-        case 8:
-            {
-            ps_attempt = ks0 * g.Nsurf;
-            if (gsl_rng_uniform(r) < ps_attempt)
-                {
-                    ind = gsl_rng_uniform_int(r, g.boundary.size());
-                    e = g.boundary[ind];
-                    if (g.check_inside_overlap(e) > 0)
-                    {
-                        ssadd = attempt_add_monomer_dimer(g, e, r);
-                        if (ssadd > 1)
-                            dimeradded++;
-                        else if (ssadd > 0)
-                            monomeradded++;
-                        ssadd = -1;
-                        g.update_boundary();
-                    }
-                }
-            }
-            break;
-
-        case 9:
-        {
-            for (int nc = 0; nc < g.Nhe; nc++)
-            {
-                int ind1 = gsl_rng_uniform_int(r, g.Nhe);
-                int e1 = g.he[ind1].id;
-                int x = -1;
-                x = attempt_change_edge_type(g, e1, r);
-                if (x >= 0)
-                    typechanged++;
-            }
-        }
-        break;
-
-
-        }
-        }*/
-        /*case 8:
-            move_vertex(g, r);
-            break;
-
-            //g.check_odd_neigh();
-
-            //change edge type
-        case 9:
-        {
-            for (int nc = 0; nc < g.Nhe; nc++)
-            {
-                int ind1 = gsl_rng_uniform_int(r, g.Nhe);
-                int e1 = g.he[ind1].id;
-                int x = -1;
-                x = attempt_change_edge_type(g, e1, r);
-                if (x >= 0)
-                    typechanged++;
-            }
-        }
-        break;*/
-
-            /*case 8:
-            if (g.Nsurf > 0){
-                int p_attempt = kb0 * g.Nsurf;
-                if (gsl_rng_uniform(r) < p_attempt)
-                {
-                    ind = gsl_rng_uniform_int(r, g.boundary.size());
-                    e = g.boundary[ind];
-                    int ssbind = attempt_bind_triangle(g, e, r);
-                    if (ssbind>0){
-                        cout <<"bound triangle"<<endl;
-                    }
-                    g.update_boundary();
-                }
-            }
-            break;
-
-        case 9:
-            
-            int p_attempt = kb0 * g.Nhe;
-            if ( gsl_rng_uniform(r) < p_attempt)
-            {
-                ind = gsl_rng_uniform_int(r, g.Nhe);
-                e = g.he[ind].id;
-                int ssunbind = attempt_unbind_triangle(g, e, r);
-                if (ssunbind>0){
-                    cout << "unbound triangle"<<endl;
-                }
-                g.update_boundary();
-            }
-            break;*/
-
             /****************** DRUG ****************************/
             // uncomment this part for drug 
                 
