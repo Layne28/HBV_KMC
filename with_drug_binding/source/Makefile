@@ -23,4 +23,4 @@ assembly:  tri_tri_intersect.cpp tri_tri_intersect.hpp Geometry.cpp Geometry.hpp
 
 
 clean:
-	rm -fr *.o
+	rm -fr *.o assemble
