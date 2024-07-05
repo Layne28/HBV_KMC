@@ -289,12 +289,12 @@ int main(int argc, char **argv)
     int ssadd = 0;
     //int ssremove = 0;
 
-    int runhpc = 1;
+    int runhpc = 0;
     int test = 0;
 
-    int freq_vis = 1000;
-    int freq_log = 1000;
-    int freq_out = 10000; // shoud be >=freq_log
+    int freq_vis = 1000000;
+    int freq_log = 1000000;
+    int freq_out = 10000000; // shoud be >=freq_log
     if (runhpc == 1)
     {
         freq_vis = 100;
