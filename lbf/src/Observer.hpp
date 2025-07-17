@@ -5,7 +5,7 @@
 
 #include <string>
 #include <iomanip>
-#include <experimental/filesystem>
+#include <filesystem>
 #include "MC.hpp"
 #include "System.hpp"
 //#include <H5Cpp.h>
@@ -30,9 +30,9 @@ public:
 
     int particles_freq=10;
     int thermo_freq=10;
-    int noise_freq=10;
-    int do_h5md=1;
-    int do_output_noise=1;
+    int freq_log=10;
+    int print_freq=1000; //how often to print to console
+    //int do_h5md=1;
 
     /*** Methods ***/
 
@@ -43,8 +43,19 @@ public:
     ~Observer();
 
     //Output
-    void open_h5md(System &theSys, std::string subdir);
-    void dump_h5md(System &theSys, std::string subdir); //write all particle data to hdf5 file
+    //void open_h5md(System &theSys, std::string subdir);
+    //void dump_h5md(System &theSys, std::string subdir); //write all particle data to hdf5 file
+    void dump_parameters(System &theSys, std::string subdir);
+    void dump_lammps_traj(System &g, int time0);
+    void dump_lammps_traj_restart(System &g, int time0);
+    void dump_lammps_data_file(System &g, int time0);
+    void dump_lammps_traj_dimers(System &g, int time0);
+    void dump_lammps_data_dimers(System &g, int time0);
+
+    void dump_restart_lammps_data_file(System &g, int time0);
+    void dump_data_frame(System &g, FILE *f, int time);
+    void dump_analysis(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1);
+
 };
 
 

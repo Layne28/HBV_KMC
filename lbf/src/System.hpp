@@ -6,6 +6,7 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include <cstring>
 #include "ParamDict.hpp"
 #include "Observer.hpp"
 #include "CustomRandom.hpp"
@@ -66,10 +67,11 @@ class System
 {
 private:
     Observer *obs; //use to write output
-    gsl_rng *rg;
+	gsl_rng *rg;
 
 public:
     //Variables
+	int seed = 0;
     bool Test_assembly; // for trial runs =1
 	int Nvlast;
 	int Nhelast;
@@ -103,7 +105,17 @@ public:
 	double dg;
 	double mudimer;
 	double *mu;
+	double dmu;
 	double mudrug;
+	double ks0;
+	double kd0;
+	double dg12;
+	double dg01;
+	double dg20;
+	double dg33;
+	double dg00;
+	double dgother;
+	double gdrug0;
 
 	double gaussian_sigma;
 	double l_thermal_sigma;
@@ -167,8 +179,9 @@ public:
 	void update_excluder_top();
 	void update_excluder_top_he(int heid);
 	void update_normals_vertex(int vindex0);
-	void update_System_vertex(int vindex0);
+	void update_geometry_vertex(int vindex0);
 	void update_excluder_top_vertex(int vindex0);
+	void update_geometry_parameters();
 
     //Miscellaneous
     int is_boundary(int heid0);
@@ -276,7 +289,6 @@ int read_restart_lammps_data_file(System &g, char filename[]);
 int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step);
 void dump_restart_lammps_data_file(System &g, int time0);
 void dump_data_frame(System &g, FILE *f, int time);
-void update_System_parameters(System &g);
 void recenter(System &g);
 int surfclosev(System &g);
 void make_initial_triangle(System &g);

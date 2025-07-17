@@ -3,456 +3,1343 @@
 Observer::Observer(ParamDict &theParams)
 {
     if(theParams.is_key("output_dir")) output_dir = theParams.get_value("output_dir") + "/";
-    if(theParams.is_key("particles_freq")) particles_freq = std::stoi(theParams.get_value("particles_freq"));
+    if(theParams.is_key("config_freq")) particles_freq = std::stoi(theParams.get_value("config_freq"));
     if(theParams.is_key("thermo_freq")) thermo_freq = std::stoi(theParams.get_value("thermo_freq"));
-    if(theParams.is_key("noise_freq")) noise_freq = std::stoi(theParams.get_value("noise_freq"));
-    if(theParams.is_key("do_output_noise")) do_output_noise = std::stoi(theParams.get_value("do_output_noise"));
 
     fs::create_directories(output_dir);
 }
 
 Observer::~Observer() {}
 
-void Observer::open_h5md(System &theSys, std::string subdir)
+void Observer::dump_parameters(System &theSys, std::string subdir)
 {
-    //Create an empty h5md file for storing the trajectory
-    using namespace HighFive;
-    fs::create_directories(output_dir + subdir);
-    std::string name = output_dir + subdir + "/traj.h5";
-    std::cout << name << std::endl;
-    if(fs::exists(name))
+
+    FILE *fi;
+	std::string mydir = output_dir + subdir + "/";
+    fs::create_directories(mydir);
+
+    int seed = theSys.seed;
+
+    fi = fopen((mydir + "parameters_run.out").c_str(), "a");
+    fprintf(fi, "./source/assemble seed epsilon0 kappa0 kappaPhi0 theta0 theta1 LnK muCd ks0 dmu dummydg mudrug gdrug kd0 dg12 dg01 dg20 dg33 dg00 dgother\n");
+    //fprintf(fi, "./source/assemble seed epsilon0 kappa0 kappaPhi0 theta0 theta1 LnK muCD ks0 dmu dummydg mudrug gdrug kd0                                 \n");
+    fprintf(fi, "./source/assemble %lu %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.6f %.3f %.3f %.3f %.3f %.6f %.3f %.3f %.3f %.3f %.3f %.3f\n",
+            seed, theSys.epsilon[0], theSys.kappa[0], theSys.kappaPhi[0], theSys.theta0[0], theSys.theta0[1], theSys.gb0, theSys.mu[0], theSys.ks0, theSys.dmu, theSys.dg, theSys.mudrug, theSys.gdrug0, theSys.kd0, theSys.dg12, theSys.dg01, theSys.dg20, theSys.dg33, theSys.dg00, theSys.dgother);
+
+    for (int i = 0; i < theSys.Ntype; i++)
     {
-        std::cout << "Warning: file already exists. Overwriting..." << std::endl; 
-        fs::remove(name);
-    }
-    File file(name, File::ReadWrite | File::Create | File::Truncate);
-
-    Group h5md = file.createGroup("/h5md");
-    Group particles = file.createGroup("/particles");
-    Group observables = file.createGroup("/observables");
-    Group parameters = file.createGroup("/parameters");
-
-    //Subgroups of "parameters"
-    DataSet dim_value = file.createDataSet<int>("/parameters/dimensions", DataSpace::From(theSys.dim));
-    dim_value.write(theSys.dim);
-
-    //Subgroups of "observables"
-    Group potential_energy = file.createGroup("/observables/potential_energy");
-
-    //Subgroups of "particles"
-    Group all_particles = file.createGroup("particles/all");
-    Group box = file.createGroup("/particles/all/box");
-    Group position = file.createGroup("/particles/all/position");
-    Group velocity = file.createGroup("/particles/all/velocity");
-    Group conservative_force = file.createGroup("/particles/all/conservative_force");
-    Group active_force = file.createGroup("/particles/all/active_force");
-    Group active_div = file.createGroup("/particles/all/active_divergence");
-    Group image = file.createGroup("/particles/all/image");
-
-    //Sugroups of "connectivity"
-    if(theSys.is_network){
-        if(theSys.can_bonds_break==0) {
-
-            std::vector<int> bonds_to;
-            std::vector<int> bonds_from;
-
-            //Get connectivity
-            std::vector<std::vector<int>> bond_list = theSys.get_connectivity();
-            for(int i=0; i<bond_list.size(); i++) {
-                bonds_from.push_back(bond_list[i][0]+1);
-                bonds_to.push_back(bond_list[i][1]+1);
-            }
-
-            //write connectivity to file
-            DataSet all_bonds_from = file.createDataSet<int>("/parameters/vmd_structure/bond_from", DataSpace::From(bonds_from));
-            all_bonds_from.write(bonds_from);
-
-            DataSet all_bonds_to = file.createDataSet<int>("/parameters/vmd_structure/bond_to", DataSpace::From(bonds_to));
-            all_bonds_to.write(bonds_to);
-
-            Reference myRef1 = Reference(file, all_particles);
-            Attribute bonds_to_group = all_bonds_to.createAttribute<Reference>("particles_group", DataSpace::From(myRef1));
-            bonds_to_group.write(myRef1);
-            Reference myRef2 = Reference(file, all_particles);
-            Attribute bonds_from_group = all_bonds_from.createAttribute<Reference>("particles_group", DataSpace::From(myRef2));
-            bonds_from_group.write(myRef2);
-        }
-        else {
-            Group connectivity = file.createGroup("/particles/all/connectivity");
-        }
-    }
-
-    //Assets of "box"
-    std::vector<std::string> boundary_types(theSys.dim);
-
-    for (int d=0; d<theSys.dim; d++) {
-        if (theSys.is_periodic[d]) {
-            boundary_types[d] = "periodic";
-        }
-        else {
-            boundary_types[d] = "none";
-        }
-    }
-
-    Attribute box_dimension = box.createAttribute<int>("dimension", DataSpace::From(theSys.dim));
-    box_dimension.write(theSys.dim);
-
-    Attribute box_boundary = box.createAttribute<std::string>("boundary", DataSpace::From(boundary_types));
-    box_boundary.write(boundary_types);
-
-    DataSet edge_values = file.createDataSet<double>("/particles/all/box/edges", DataSpace::From(theSys.edges));
-    edge_values.write(theSys.edges);
-}
-
-void Observer::dump_h5md(System &theSys, std::string subdir)
-{
-    //Write trajectory data in the h5md format
-    using namespace HighFive;
-    try
-    {
-        std::string name = output_dir + subdir + "/traj.h5";
-        if(!fs::exists(name))
+        for (int j = 0; j < theSys.Ntype; j++)
         {
-            std::cout << "Error: file does not exist!" << std::endl; 
-            exit(0);
-        }
-        File file(name, File::ReadWrite);
-
-        //Create necessary data structures for storage
-        std::vector<std::vector<std::vector<double>>> all_pos(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
-        std::vector<std::vector<std::vector<double>>> all_vel(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
-        std::vector<std::vector<std::vector<double>>> all_conservative_force(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
-        std::vector<std::vector<std::vector<double>>> all_active_force(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
-        std::vector<std::vector<double>> all_active_div(1, std::vector<double>(theSys.N, 0.0));
-        std::vector<std::vector<std::vector<int>>> all_image(1, std::vector<std::vector<int>>(theSys.N, std::vector<int>(3,0)));
-
-        //HDF5 doesn't seem to like variable-length time series data.
-        //Just put in enough memory for any "physically reasonable" bond arrangmenet
-        //And ignore (0,0) bonds in output
-        int nbonds = 24*theSys.N; //Max limit to bonds per particle//theSys.get_num_bonds();
-        std::vector<std::vector<std::vector<int>>> all_bonds(1, std::vector<std::vector<int>>(nbonds, std::vector<int>(2,0)));
-
-        DataSpace part_val_space = DataSpace({1,theSys.N,3},{DataSpace::UNLIMITED, theSys.N,3});
-        DataSpace part_single_val_space = DataSpace({1,theSys.N},{DataSpace::UNLIMITED, theSys.N});
-        DataSpace part_t_space = DataSpace({1},{DataSpace::UNLIMITED});
-        DataSpace part_bond_space = DataSpace({1,nbonds,2},{DataSpace::UNLIMITED, nbonds,2});
-        DataSetCreateProps props_val;
-        props_val.add(Chunking(std::vector<hsize_t>{1,theSys.N,3}));
-        DataSetCreateProps props_single_val;
-        props_single_val.add(Chunking(std::vector<hsize_t>{1,theSys.N}));
-        DataSetCreateProps props_time;
-        props_time.add(Chunking(std::vector<hsize_t>{1}));
-        DataSetCreateProps props_bond;
-        props_bond.add(Chunking(std::vector<hsize_t>{1,nbonds,2}));
-
-        //Fill in positions and velocities
-        for (int i=0; i<theSys.N; i++) {
-            for (int j=0; j<theSys.dim; j++) {
-                all_pos[0][i][j] = theSys.particles[i].pos(j);
-                all_vel[0][i][j] = theSys.particles[i].vel(j);
-                all_conservative_force[0][i][j] = theSys.particles[i].conservative_force(j);
-                all_active_force[0][i][j] = theSys.particles[i].active_force(j);
-                all_image[0][i][j] = theSys.image[i][j];
+            if (theSys.gb[i][j] != 0)
+            {
+                fprintf(fi, "half_edge %d -> %d : %.3f kT \n", i, j, theSys.gb[i][j]);
+                fprintf(stderr, "half_edge %d -> %d : %.3f kT \n", i, j, theSys.gb[i][j]);
             }
-            all_active_div[0][i] = theSys.particles[i].active_div;
-        }
-
-        //Get bonds
-        std::vector<std::vector<int>> bond_list = theSys.get_connectivity();
-        for(int i=0; i<theSys.get_num_bonds(); i++){
-            all_bonds[0][i][0] = bond_list[i][0];
-            all_bonds[0][i][1] = bond_list[i][1];
-        }
-
-        //Update position
-        if (!file.exist("/particles/all/position/step")) {
-            //std::cout << "creating position data" << std::endl;
-            DataSet step = file.createDataSet<int>("/particles/all/position/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/particles/all/position/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<double>("/particles/all/position/value", part_val_space, props_val);
-            value.select({0,0,0},{1,theSys.N,3}).write(all_pos);
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/particles/all/position/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/particles/all/position/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update position values
-            DataSet value = file.getDataSet("/particles/all/position/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_pos);
-        }
-
-        //Update velocity
-        if (!file.exist("/particles/all/velocity/step")) {
-            //std::cout << "creating velocity data" << std::endl;
-            DataSet step = file.createDataSet<int>("/particles/all/velocity/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/particles/all/velocity/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<double>("/particles/all/velocity/value", part_val_space, props_val);
-            value.select({0,0,0},{1,theSys.N,3}).write(all_vel);
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/particles/all/velocity/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/particles/all/velocity/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update velocity values
-            DataSet value = file.getDataSet("/particles/all/velocity/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_vel);
-        }
-
-        //Update conservative force
-        if (!file.exist("/particles/all/conservative_force/step")) {
-            //std::cout << "creating conservative_force data" << std::endl;
-            DataSet step = file.createDataSet<int>("/particles/all/conservative_force/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/particles/all/conservative_force/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<double>("/particles/all/conservative_force/value", part_val_space, props_val);
-            value.select({0,0,0},{1,theSys.N,3}).write(all_conservative_force);
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/particles/all/conservative_force/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/particles/all/conservative_force/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update conservative_force values
-            DataSet value = file.getDataSet("/particles/all/conservative_force/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_conservative_force);
-        }
-
-        //Update active force
-        if (!file.exist("/particles/all/active_force/step")) {
-            //std::cout << "creating active_force data" << std::endl;
-            DataSet step = file.createDataSet<int>("/particles/all/active_force/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/particles/all/active_force/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<double>("/particles/all/active_force/value", part_val_space, props_val);
-            value.select({0,0,0},{1,theSys.N,3}).write(all_active_force);
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/particles/all/active_force/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/particles/all/active_force/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update active_force values
-            DataSet value = file.getDataSet("/particles/all/active_force/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_active_force);
-        }
-
-        //Update active divergence
-        if (!file.exist("/particles/all/active_divergence/step")) {
-            //std::cout << "creating active_force data" << std::endl;
-            DataSet step = file.createDataSet<int>("/particles/all/active_divergence/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/particles/all/active_divergence/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<double>("/particles/all/active_divergence/value", part_single_val_space, props_single_val);
-            value.select({0,0},{1,theSys.N}).write(all_active_div);
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/particles/all/active_divergence/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/particles/all/active_divergence/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update active_div values
-            DataSet value = file.getDataSet("/particles/all/active_divergence/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select({value_dim_old[0],0},{1,theSys.N}).write(all_active_div);
-        }
-
-        //Update image
-        if (!file.exist("/particles/all/image/step")) {
-            DataSet step = file.createDataSet<int>("/particles/all/image/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/particles/all/image/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<int>("/particles/all/image/value", part_val_space, props_val);
-            value.select({0,0,0},{1,theSys.N,3}).write(all_image);
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/particles/all/image/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/particles/all/image/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update image values
-            DataSet value = file.getDataSet("/particles/all/image/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_image);
-        }
-
-        //Update connectivity
-        if (!file.exist("/particles/all/connectivity/step")) {
-            //std::cout << "creating connectivity data" << std::endl;
-            DataSet step = file.createDataSet<int>("/particles/all/connectivity/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/particles/all/connectivity/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<int>("/particles/all/connectivity/value", part_bond_space, props_bond);
-            value.select({0,0,0},{1,nbonds,2}).write(all_bonds);
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/particles/all/connectivity/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/particles/all/connectivity/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update connectivity values
-            DataSet value = file.getDataSet("/particles/all/connectivity/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select({value_dim_old[0],0,0},{1,nbonds,2}).write(all_bonds);
-        }
-
-        //Update energy
-        if (!file.exist("/observables/potential_energy/step")) {
-            //std::cout << "creating energy data" << std::endl;
-            DataSet step = file.createDataSet<int>("/observables/potential_energy/step", part_t_space, props_time);
-            step.write(theSys.time);
-            DataSet time = file.createDataSet<double>("/observables/potential_energy/time", part_t_space, props_time);
-            time.write(theSys.time*theSys.dt);
-            DataSet value = file.createDataSet<double>("/observables/potential_energy/value", part_t_space, props_time);
-            value.write(theSys.get_energy());
-        }
-        else {
-            //Update step
-            DataSet step = file.getDataSet("/observables/potential_energy/step");
-            std::vector<long unsigned int> step_dim = step.getDimensions();
-            std::vector<long unsigned int> step_dim_old = step_dim;
-            step_dim[0] += 1;
-            step.resize(step_dim);
-            step.select(step_dim_old,{1}).write(theSys.time);
-
-            //Update time
-            DataSet time = file.getDataSet("/observables/potential_energy/time");
-            std::vector<long unsigned int> time_dim = time.getDimensions();
-            std::vector<long unsigned int> time_dim_old = time_dim;
-            time_dim[0] += 1;
-            time.resize(time_dim);
-            time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
-
-            //Update energy values
-            DataSet value = file.getDataSet("/observables/potential_energy/value");
-            std::vector<long unsigned int> value_dim = value.getDimensions();
-            std::vector<long unsigned int> value_dim_old = value_dim;
-            value_dim[0] += 1;
-            value.resize(value_dim);
-            value.select(value_dim_old,{1}).write(theSys.get_energy());
         }
     }
-    catch(Exception& err)
+
+    for (int i = 0; i < theSys.Ntype; i++)
     {
-        std::cerr << err.what() << std::endl;
+        for (int j = 0; j < theSys.Ntype; j++)
+        {
+            if (theSys.gdrug[i][j] != 0)
+            {
+                fprintf(fi, "half_edge %d -> %d : %.3f kT \n", i, j, theSys.gdrug[i][j]);
+                fprintf(stderr, "half_edge %d -> %d : %.3f kT \n", i, j, theSys.gdrug[i][j]);
+            }
+        }
     }
+
+    fprintf(fi, "theta_thermal_kappa %.5f\n", theSys.theta_thermal_kappa);
+    fprintf(fi, "l_thermal_kappa %.5f\n", theSys.l_thermal_kappa);
+    fprintf(fi, "l_thermal_epsilon %.5f\n", theSys.l_thermal_sigma);
+    fprintf(fi, "gaussian sigma %.5f\n", theSys.gaussian_sigma);
+
+    fflush(fi);
+    fclose(fi);
 }
+
+void dump_lammps_traj(System &g, int time0)
+{
+	char filename[80];
+	float box = 3.0;
+	sprintf(filename, "trajlammps_bonds.dat");
+	FILE *f;
+	f = fopen(filename, "a");
+	//fprintf(f,"@<TRIPOS>MOLECULE\n");
+
+	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
+	fprintf(f, "\n%d atoms", g.Nv + g.Nd);
+	fprintf(f, "\n%d bonds", g.Nhe / 2);
+	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
+	fprintf(f, "\n");
+	fprintf(f, "\n4 atom types");
+	fprintf(f, "\n4 bond types");
+	fprintf(f, "\n");
+	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
+	fprintf(f, "\n");
+	fprintf(f, "\nAtoms");
+	fprintf(f, "\n");
+	//cout << "here in dump 000"<<endl;
+	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
+	{
+		//cout <<" it->co[0]"<< it->co[0]<< endl;
+		//exit(-1);
+		if (g.is_bond_vboundary(it->vid) > 0)
+		{
+			fprintf(f, "\n%li 3 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+		}
+
+		else if (it->hein.size() == 5 && g.is_vboundary(it->vid) < 0)
+		{
+			fprintf(f, "\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+			
+		}
+		else
+		{
+			fprintf(f, "\n%li 2 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+		}
+		//fprintf(stderr,"\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(),it)+1 ,it->co[0], it->co[1], it->co[2]);
+	}
+	int counter = g.Nv + 1;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		if (it->din == 1)
+		{
+			int vindex = g.vidtoindex[it->vin];
+			double x0 = 0;
+			double x1 = 0;
+			double x2 = 0;
+			if (it->previd != -1)
+			{
+				int preindex = g.heidtoindex[it->previd];
+				x0 = -.1 * g.he[preindex].hevec[0];
+				x1 = -.1 * g.he[preindex].hevec[1];
+				x2 = -.1 * g.he[preindex].hevec[2];
+			}
+			fprintf(f, "\n%d 4 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
+		}
+	}
+
+	fprintf(f, "\n");
+	fprintf(f, "\nBonds");
+	fprintf(f, "\n");
+	//cout <<" "<<endl;
+	//cout << "here in dump 222"<<endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		//cout << "edge " <<distance(g.he.begin(),it)+1 <<" " << it->id << "vin vid" << g.vidtoindex[it->vin] << "vout vid" << g.vidtoindex[it->vout] <<endl;
+		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
+		{
+			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
+			exit(-1);
+		}
+		int btype = it->type + 1;
+		//if ( it->type==2) {  btype=2 ;}
+		//if ( it->type==3) {  btype=1 ;}
+		if ((it->type == 1) || (it->type == 0))
+		{
+			fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
+		}
+		//}
+		//if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)<0) {
+		//fprintf(f, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//fprintf(stderr, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//}
+		//else if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)>0) {
+		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//}
+		//else {
+		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it) , g.vidtoindex[it->vin], g.vidtoindex[it->vout]);
+		//}
+	}
+
+	//exit(-1);
+	fprintf(f, "\n");
+	fclose(f);
+}
+
+void dump_lammps_traj_restart(System &g, int time0)
+{ //currently no drug
+	char filename[80];
+	float box = 3.0;
+	sprintf(filename, "trajlammps_restart.dat");
+	FILE *f;
+	f = fopen(filename, "a");
+	//fprintf(f,"@<TRIPOS>MOLECULE\n");
+
+	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
+	fprintf(f, "\n%d atoms", g.Nv);
+	fprintf(f, "\n%d bonds", g.Nhe);
+	fprintf(f, "\n%d angles", g.Nhe);
+	fprintf(f, "\n0 dihedrals");				  //next _ prev
+	fprintf(f, "\n%li impropers", g.boundary.size()); // prev_boundary this next_boundary
+	fprintf(f, "\n");
+	fprintf(f, "\n1 atom types"); //vertex
+	fprintf(f, "\n4 bond types");
+	fprintf(f, "\n1 angle types");
+	fprintf(f, "\n%d improper types", g.Nboundary);
+	fprintf(f, "\n");
+	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
+	fprintf(f, "\n");
+	fprintf(f, "\nAtoms");
+	fprintf(f, "\n");
+
+	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
+	{
+		fprintf(f, "\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+	}
+
+	fprintf(f, "\n");
+	fprintf(f, "\nBonds");
+	fprintf(f, "\n");
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
+		{
+			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
+			exit(-1);
+		}
+		int btype = it->type + 1;
+		fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
+	}
+	fprintf(f, "\n");
+	fprintf(f, "\nAngles"); // this is he - next -prev
+	fprintf(f, "\n");
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		int atype = 1;
+		int henext = -1;
+		int heprev = -1;
+		if (it->nextid != -1)
+		{
+			henext = g.heidtoindex[it->nextid];
+		}
+		if (it->previd != -1)
+		{
+			heprev = g.heidtoindex[it->previd];
+		}
+
+		fprintf(f, "\n%li %d %d %d %d", distance(g.he.begin(), it) + 1, atype, g.heidtoindex[it->id] + 1, henext + 1, heprev + 1);
+	}
+
+	fprintf(f, "\n");
+	fprintf(f, "\nImpropers"); // this is he - prev_boundary this next_boundary
+	fprintf(f, "\n");
+	for (vector<int>::iterator it = g.boundary.begin(); it != g.boundary.end(); ++it)
+	{
+		int heindex0 = g.heidtoindex[*it];
+		int btype = 0; //ToDo should be updated!
+		fprintf(f, "\n%li %d %d %d %d", distance(g.boundary.begin(), it) + 1, btype, g.heidtoindex[g.he[heindex0].previd_boundary] + 1, heindex0 + 1, g.he[heindex0].boundary_index);
+	}
+	fprintf(f, "\n");
+	fclose(f);
+}
+
+void dump_lammps_data_file(System &g, int time0)
+{
+	char filename[80];
+	float box = 3.0;
+	sprintf(filename, "snap_%07d.dat", time0);
+	FILE *f;
+	f = fopen(filename, "w");
+	//fprintf(f,"@<TRIPOS>MOLECULE\n");
+
+	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
+	fprintf(f, "\n%d atoms", g.Nv + g.Nd);
+	fprintf(f, "\n%d bonds", g.Nhe / 2);
+	fprintf(f, "\n0 angles");
+	fprintf(f, "\n0 dihedrals");
+	fprintf(f, "\n0 impropers");
+	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
+	fprintf(f, "\n");
+	fprintf(f, "\n4 atom types");
+	fprintf(f, "\n4 bond types");
+	fprintf(f, "\n");
+	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
+	fprintf(f, "\n");
+	fprintf(f, "\nAtoms");
+	fprintf(f, "\n");
+	//cout << "here in dump 000"<<endl;
+	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
+	{
+		//cout <<" it->co[0]"<< it->co[0]<< endl;
+		//exit(-1);
+		if (g.is_bond_vboundary(it->vid) > 0)
+		{
+			fprintf(f, "\n%li 1 3 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+		}
+
+		else if (it->hein.size() == 5 && g.is_vboundary(it->vid) < 0)
+		{
+			fprintf(f, "\n%li 1 1 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+			
+		}
+		else
+		{
+			fprintf(f, "\n%li 1 2 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+		}
+		//fprintf(stderr,"\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(),it)+1 ,it->co[0], it->co[1], it->co[2]);
+	}
+	int counter = g.Nv + 1;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		if (it->din == 1)
+		{
+			int vindex = g.vidtoindex[it->vin];
+			double x0 = 0;
+			double x1 = 0;
+			double x2 = 0;
+			if (it->previd != -1)
+			{
+				int preindex = g.heidtoindex[it->previd];
+				x0 = -.1 * g.he[preindex].hevec[0];
+				x1 = -.1 * g.he[preindex].hevec[1];
+				x2 = -.1 * g.he[preindex].hevec[2];
+			}
+			fprintf(f, "\n%d 1 4 0 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
+		}
+	}
+
+	fprintf(f, "\n");
+	fprintf(f, "\nBonds");
+	fprintf(f, "\n");
+	//cout <<" "<<endl;
+	//cout << "here in dump 222"<<endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		//cout << "edge " <<distance(g.he.begin(),it)+1 <<" " << it->id << "vin vid" << g.vidtoindex[it->vin] << "vout vid" << g.vidtoindex[it->vout] <<endl;
+		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
+		{
+			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
+			exit(-1);
+		}
+		int btype = it->type + 1;
+		//if ( it->type==2) {  btype=2 ;}
+		//if ( it->type==3) {  btype=1 ;}
+		if ((it->type == 1) || (it->type == 0))
+		{
+			fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
+		}
+		//}
+		//if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)<0) {
+		//fprintf(f, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//fprintf(stderr, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//}
+		//else if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)>0) {
+		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//}
+		//else {
+		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
+		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it) , g.vidtoindex[it->vin], g.vidtoindex[it->vout]);
+		//}
+	}
+
+	//exit(-1);
+	fprintf(f, "\n");
+	fclose(f);
+}
+
+void dump_lammps_traj_dimers(System &g, int time0)
+{
+
+	char filename[80];
+	float box = 3.0;
+	
+	sprintf(filename, "trajlammps.dat");
+	FILE *f;
+	f = fopen(filename, "a");
+	//fprintf(f,"@<TRIPOS>MOLECULE\n");
+
+	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
+	fprintf(f, "\n%d atoms", g.Nhe + g.Nhe + g.Nhe + g.Nd + 8);
+	fprintf(f, "\n%d bonds", g.Nhe);
+	fprintf(f, "\n0 angles");
+	fprintf(f, "\n0 dihedrals");
+	fprintf(f, "\n0 impropers");
+	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
+	fprintf(f, "\n");
+	fprintf(f, "\n10 atom types");
+	fprintf(f, "\n4 bond types");
+	fprintf(f, "\n");
+	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
+	fprintf(f, "\n");
+	fprintf(f, "\nAtoms");
+	fprintf(f, "\n");
+	//vin of each half edge
+	int counter = 1;
+
+	//cout <<"in dump  here 222"<<endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		//double x0 = g.v[g.vidtoindex[it->vin]].co[0];
+		//double x1 = g.v[g.vidtoindex[it->vin]].co[1];
+		//double x2 = g.v[g.vidtoindex[it->vin]].co[2];
+
+		double x0 = .9 * (g.v[g.vidtoindex[it->vin]].co[0]) + .1 * (g.v[g.vidtoindex[it->vout]].co[0]);
+		double x1 = .9 * (g.v[g.vidtoindex[it->vin]].co[1]) + .1 * (g.v[g.vidtoindex[it->vout]].co[1]);
+		double x2 = .9 * (g.v[g.vidtoindex[it->vin]].co[2]) + .1 * (g.v[g.vidtoindex[it->vout]].co[2]);
+
+		int atype = it->type + 1;
+
+		if (it->type == 1)
+		{ // AB A
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 2)
+		{ //AB B
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 0)
+		{ //CD C
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 3)
+		{ //CD D
+			if (g.is_boundary(it->id) < 0)
+			{
+				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
+				int prevtype = g.he[g.heidtoindex[it->previd]].type;
+
+				if ((nexttype == 1) && (prevtype == 2))
+					atype = 1;
+			}
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+
+		if (g.v[g.vidtoindex[it->vin]].hein.size() > 2 && g.v[g.vidtoindex[it->vout]].hein.size() > 2)
+		{
+			g.Nhe_in++;
+		}
+	}
+	//cout <<"in dump   here 333"<<endl;
+	g.Nhe_in /= 2;
+	//int counter = g.Nhe + 1;
+
+	//he center beads
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		double x0 = it->hecent[0];
+		double x1 = it->hecent[1];
+		double x2 = it->hecent[2];
+		int atype = it->type + 1;
+		if (it->type == 1)
+		{ // AB A
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 2)
+		{ //AB B
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 0)
+		{ //CD C
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 3)
+		{ //CD D
+			if (g.is_boundary(it->id) < 0)
+			{
+				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
+				int prevtype = g.he[g.heidtoindex[it->previd]].type;
+
+				if ((nexttype == 1) && (prevtype == 2))
+					atype = 1;
+			}
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+	}
+	//cout <<"in dump   here 444"<<endl;
+	//drug beads
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		if (it->din == 1)
+		{
+			int vindex = g.vidtoindex[it->vin];
+			double x0 = 0;
+			double x1 = 0;
+			double x2 = 0;
+			if (it->previd != -1)
+			{
+				int preindex = g.heidtoindex[it->previd];
+				x0 = -.1 * g.he[preindex].hevec[0];
+				x1 = -.1 * g.he[preindex].hevec[1];
+				x2 = -.1 * g.he[preindex].hevec[2];
+			}
+			fprintf(f, "\n%d 1 5 0 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
+		}
+	}
+	//cout <<"in dump   here 555"<<endl;
+
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 1, box, box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 2, -box, box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 3, box, -box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 4, box, box, -box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 5, -box, -box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 6, -box, box, -box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 7, box, -box, -box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 8, -box, -box, -box);
+
+	counter += 8;
+	//temp
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		double x0 = it->hetop[0];
+		double x1 = it->hetop[1];
+		double x2 = it->hetop[2];
+		//int atype=-1;
+		//if ((it->type == 1) | (it->type == 2)) atype=2;
+
+		int atype = 7 + it->type;
+
+		fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+	}
+	//cout <<"in dump   here 666"<<endl;
+	// now bonds
+	fprintf(f, "\n");
+	fprintf(f, "\nBonds");
+	fprintf(f, "\n");
+
+	//edge_counter=1;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		// 1 A 2 B 3 C 4 D
+		int btype = it->type + 1;
+		//vin and the middle
+		int index = distance(g.he.begin(), it);
+		fprintf(f, "\n%d %d %d %d", index + 1, btype, index + 1, g.Nhe + index + 1);
+	}
+	//cout <<"in dump   here 777"<<endl;
+	fprintf(f, "\n");
+	fclose(f);
+}
+
+void dump_lammps_data_dimers(System &g, int time0)
+{
+
+	char filename[80];
+	float box = 3.0;
+	sprintf(filename, "snap_%07d.dat", time0);
+	FILE *f;
+	f = fopen(filename, "w");
+	//fprintf(f,"@<TRIPOS>MOLECULE\n");
+
+	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
+	fprintf(f, "\n%d atoms", g.Nhe + g.Nhe + g.Nd + 8);
+	fprintf(f, "\n%d bonds", g.Nhe);
+	fprintf(f, "\n0 angles");
+	fprintf(f, "\n0 dihedrals");
+	fprintf(f, "\n0 impropers");
+	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
+	fprintf(f, "\n");
+	fprintf(f, "\n6 atom types");
+	fprintf(f, "\n4 bond types");
+	fprintf(f, "\n");
+	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
+	fprintf(f, "\n");
+	fprintf(f, "\nAtoms");
+	fprintf(f, "\n");
+	//cout << "here in dump 000"<<endl;
+	int counter = 1;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		//double x0 = g.v[g.vidtoindex[it->vin]].co[0];
+		//double x1 = g.v[g.vidtoindex[it->vin]].co[1];
+		//double x2 = g.v[g.vidtoindex[it->vin]].co[2];
+
+		double x0 = .9 * (g.v[g.vidtoindex[it->vin]].co[0]) + .1 * (g.v[g.vidtoindex[it->vout]].co[0]);
+		double x1 = .9 * (g.v[g.vidtoindex[it->vin]].co[1]) + .1 * (g.v[g.vidtoindex[it->vout]].co[1]);
+		double x2 = .9 * (g.v[g.vidtoindex[it->vin]].co[2]) + .1 * (g.v[g.vidtoindex[it->vout]].co[2]);
+
+		int atype = it->type + 1;
+
+		//The "1" and "0" entries are just here to be consistent with lammps data format
+		//so that vmd topotools can read the files 
+
+		if (it->type == 1)
+		{ // AB A
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 2)
+		{ //AB B
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 0)
+		{ //CD C
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 3)
+		{ //CD D
+			if (g.is_boundary(it->id) < 0)
+			{
+				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
+				int prevtype = g.he[g.heidtoindex[it->previd]].type;
+
+				if ((nexttype == 1) && (prevtype == 2))
+					atype = 1;
+			}
+			fprintf(f, "\n%d 1 %d %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+	}
+	//int counter = g.Nhe + 1;
+
+	//he center beads
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		double x0 = it->hecent[0];
+		double x1 = it->hecent[1];
+		double x2 = it->hecent[2];
+		int atype = it->type + 1;
+		if (it->type == 1)
+		{ // AB A
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 2)
+		{ //AB B
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 0)
+		{ //CD C
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+		else if (it->type == 3)
+		{ //CD D
+			if (g.is_boundary(it->id) < 0)
+			{
+				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
+				int prevtype = g.he[g.heidtoindex[it->previd]].type;
+
+				if ((nexttype == 1) && (prevtype == 2))
+					atype = 1;
+			}
+			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
+		}
+	}
+
+	//drug beads
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		if (it->din == 1)
+		{
+			int vindex = g.vidtoindex[it->vin];
+			double x0 = 0;
+			double x1 = 0;
+			double x2 = 0;
+			if (it->previd != -1)
+			{
+				int preindex = g.heidtoindex[it->previd];
+				x0 = -.1 * g.he[preindex].hevec[0];
+				x1 = -.1 * g.he[preindex].hevec[1];
+				x2 = -.1 * g.he[preindex].hevec[2];
+			}
+			fprintf(f, "\n%d 1 5 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
+		}
+	}
+
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 1, box, box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 2, -box, box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 3, box, -box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 4, box, box, -box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 5, -box, -box, box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 6, -box, box, -box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 7, box, -box, -box);
+	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 8, -box, -box, -box);
+	// now bonds
+	fprintf(f, "\n");
+	fprintf(f, "\nBonds");
+	fprintf(f, "\n");
+
+	//edge_counter=1;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		// 1 A 2 B 3 C 4 D
+		int btype = it->type + 1;
+		//vin and the middle
+		int index = distance(g.he.begin(), it);
+		fprintf(f, "\n%d %d %d %d", index + 1, btype, index + 1, g.Nhe + index + 1);
+	}
+
+	//exit(-1);
+	fprintf(f, "\n");
+	fclose(f);
+}
+
+void dump_restart_lammps_data_file(System &g, int time0)
+{ //currently no drug
+	char filename[80];
+	float box = 3.0;
+	sprintf(filename, "restart_lammps.dat");
+	FILE *f;
+	f = fopen(filename, "w");
+
+	fprintf(f, "HEVA-LAMMPSDescription-Generated  time_step= %d\n", time0);
+	fprintf(f, "\n%d atoms", g.Nv);
+	fprintf(f, "\n%d bonds", g.Nhe);
+	fprintf(f, "\n%d angles", g.Nhe);				  //next _ prev
+	fprintf(f, "\n0 dihedrals");
+	fprintf(f, "\n%li impropers", g.boundary.size()); // prev_boundary this next_boundary
+	fprintf(f, "\n");
+	fprintf(f, "\n1 atom types"); //vertex
+	fprintf(f, "\n4 bond types");
+	fprintf(f, "\n1 angle types");
+	fprintf(f, "\n%d improper types", g.Nboundary);
+	fprintf(f, "\n");
+	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
+	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
+	fprintf(f, "\n");
+	fprintf(f, "\nAtoms");
+	fprintf(f, "\n");
+
+	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
+	{
+		fprintf(f, "\n%li 1 1 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
+	}
+
+	fprintf(f, "\n");
+	fprintf(f, "\nBonds");
+	fprintf(f, "\n");
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
+		{
+			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
+			exit(-1);
+		}
+		int btype = it->type + 1;
+		fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
+	}
+	fprintf(f, "\n");
+	fprintf(f, "\nAngles"); // this is he - next -prev
+	fprintf(f, "\n");
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		int atype = 1;
+		int henext = -1;
+		int heprev = -1;
+		if (it->nextid != -1)
+		{
+			henext = g.heidtoindex[it->nextid];
+		}
+		if (it->previd != -1)
+		{
+			heprev = g.heidtoindex[it->previd];
+		}
+
+		fprintf(f, "\n%li %d %d %d %d", distance(g.he.begin(), it) + 1, atype, g.heidtoindex[it->id] + 1, henext + 1, heprev + 1);
+	}
+
+	fprintf(f, "\n");
+	fprintf(f, "\nImpropers"); // this is he - prev_boundary this next_boundary
+	fprintf(f, "\n");
+	for (vector<int>::iterator it = g.boundary.begin(); it != g.boundary.end(); ++it)
+	{
+		int heindex0 = g.heidtoindex[*it];
+		int btype = 0; //ToDo should be updated!
+		fprintf(f, "\n%li %d %d %d %d", distance(g.boundary.begin(), it) + 1, btype, g.heidtoindex[g.he[heindex0].previd_boundary] + 1, heindex0 + 1, g.he[heindex0].boundary_index);
+	}
+	fprintf(f, "\n");
+	fclose(f);
+}
+
+void dump_data_frame(System &g, FILE *f, int time)
+{
+	double avgL0 = 0, avgL1 = 0, avgTheta0 = 0, avgTheta1 = 0, avgPhi00 = 0, avgPhi11 = 0, avgPhi01 = 0;
+	int L0 = 0, L1 = 0, Theta0 = 0, Theta1 = 0, Phi00 = 0, Phi11 = 0, Phi01 = 0;
+
+	fprintf(f, "<configuration time_step=\"%d\">\n", time);
+	fprintf(f, "<Edges num=\"%d\">\n", g.Nhe);
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		fprintf(f, "%d %li %.4f\n", it->type, distance(g.he.begin(), it), it->l);
+		//fprintf(stderr, "%d %d %.4f\n",  it->type,distance(g.he.begin(),it),it->l);
+		if (it->type == 0)
+		{
+			avgL0 += it->l;
+			L0 += 1;
+		}
+		else if (it->type == 1)
+		{
+			avgL1 += it->l;
+			L1 += 1;
+		}
+	}
+	fprintf(f, "<Theta>\n");
+	//fprintf(stderr,"<Theta>\n");
+	double theta;
+	//for (int edge=0; edge<Ne; edge++)
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		//{
+		//if (t[edge][1] != -1 && t[edge][0] != -1) {
+
+		//cout << "      normal " << it->n[0] << " " << it->n[1] << " " << it->n[2] << " " <<endl <<endl;
+		//cout << "other  normal" << g.he[g.heidtoindex[it->opid)].n[0] << " " << g.he[g.heidtoindex[it->opid)].n[1] << " " << g.he[g.heidtoindex[it->opid)].n[2] << endl;
+		//cout << dot(it->n,g.he[g.heidtoindex[it->opid)].n) <<endl;
+		double ndot = dot(it->n, g.he[g.heidtoindex[it->opid]].n);
+		if (ndot < -1)
+		{
+			ndot = -1;
+		}
+		//cout << "ndot is"  << ndot <<endl;
+		theta = acos(ndot);
+		//}
+		fprintf(f, "%d %li %.4f\n", it->type, distance(g.he.begin(), it), theta);
+		//fprintf(stderr, "%d %d %.4f\n", it->type, distance(g.he.begin(),it), theta);
+		if (it->type == 0)
+		{
+			avgTheta0 += theta;
+			Theta0 += 1;
+			//cout << "Theta0  " << Theta0 <<endl;
+			//cout <<  "avgTheta0" << avgTheta0 <<endl;
+		}
+		else if (it->type == 1)
+		{
+			avgTheta1 += theta;
+			Theta1 += 1;
+			//cout << "Theta1  " << Theta1 <<endl;
+			//cout << "avgTheta1  " << avgTheta1 <<endl;
+		}
+		else
+		{
+			cout << "ERRRRRRRRRRRRRRRRRRRORRRRRRRRRRRRRRR , it->id" << endl;
+		}
+	}
+
+	//cout << "avgTheta1/Theta1 " << avgTheta1/Theta1 <<endl;
+	//cout << "avgTheta0/Theta0 " << avgTheta0/Theta0 <<endl;
+
+	fprintf(f, "<Phi>\n");
+	//fprintf(stderr,"<Phi>\n");
+	//update_Phi();
+	int phitype = -1;
+	double phi;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		int nextindex = g.heidtoindex[it->nextid];
+		int opindex = g.heidtoindex[it->opid];
+		double ndot = (dot(g.he[opindex].hevec, g.he[nextindex].hevec) / (g.he[opindex].l * g.he[nextindex].l));
+		if (ndot < -1)
+		{
+			ndot = -1;
+		}
+		if (ndot > 1)
+		{
+			ndot = 1;
+		}
+		phi = acos(ndot);
+		int nexttype = g.he[nextindex].type;
+		//cout << " type " << it->type << "nexttype" << nexttype <<endl;
+		if (it->type == 0 && nexttype == 0)
+		{
+			phitype = 0;
+			avgPhi00 += phi;
+			Phi00 += 1;
+			//cout << ":Phi00" <<Phi00 <<endl;
+		}
+		else if ((it->type == 0 && nexttype == 1) || (it->type == 1 && nexttype == 0))
+		{
+			phitype = 2;
+			avgPhi01 += phi;
+			Phi01 += 1;
+		}
+		else if ((it->type == 1 && nexttype == 1))
+		{
+			phitype = 1;
+			avgPhi11 += phi;
+			Phi11 += 1;
+		}
+		fprintf(f, "%d %d %d %.4f\n", phitype, it->id, it->nextid, phi);
+		//fprintf(stderr, "%d %d %d %.4f\n", phitype, it->id, it->nextid,phi);
+	}
+	fprintf(stderr, " L0 %.d L1 %.d Theta0 %.d Theta1 %.d Phi00 %.d Phi11 %.d Phi01 %.d \n", L0, L1, Theta0, Theta1, Phi00, Phi11, Phi01);
+	fprintf(stderr, " L0 %.3f L1 %.3f Theta0 %.3f Theta1 %.3f Phi00 %.3f Phi11 %.3f Phi01 %.3f \n", avgL0 / L0, avgL1 / L1, avgTheta0 / Theta0, avgTheta1 / Theta1, avgPhi00 / Phi00, avgPhi11 / Phi11, avgPhi01 / Phi01);
+}
+
+void dump_analysis(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1)
+{
+
+	if (sweep == 0)
+		fprintf(ofile, "sweep,seed,seconds,epsilon,kappa,kappaPhi,theta0,theta1,gb0,mu,dmu,dg,theta2,energy,binding_energy,Nv5,Nv6,NAB,NAB_in,NCD_Hex,NCD_other,NVin,Nhein,NCD_T4_in, NCD_T3_in,NCD_T4,NCD_T3,Nv,NE,Nsurf,Nboundary\n");
+																			//Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 	NVin,	Nhein,NCD_T4,	NCD_T3,	Nv,	NE,	Nsurf, Nboundary\n");
+																			
+	g.update_geometry_parameters();
+
+	fprintf(ofile, "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+			sweep, seed, seconds, g.epsilon[0], g.kappa[0], g.kappaPhi[0], g.theta0[0], g.theta0[1], g.gb0, g.mu[0], g.mu[1] - g.mu[0], g.dg, g.theta0[2],
+			g.compute_energy(),g.compute_bind_energy(), g.Nv5, g.Nv6, g.NAB, g.NAB_in,  g.NCD_Hex, g.NCD_other, g.Nv_in,g.Nhe_in,g.NCD_T4_in, g.NCD_T3_in,g.NCD_T4, g.NCD_T3,  g.Nv, g.Nhe / 2,g.Nsurf, g.Nboundary);
+			                    //Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 		NVin,	Nhein,NCD_T4,	NCD_T3,		Nv,		NE,		Nsurf, 	Nboundary\n");
+	fflush(ofile);
+}
+
+
+
+// void Observer::open_h5md(System &theSys, std::string subdir)
+// {
+//     //Create an empty h5md file for storing the trajectory
+//     using namespace HighFive;
+//     fs::create_directories(output_dir + subdir);
+//     std::string name = output_dir + subdir + "/traj.h5";
+//     std::cout << name << std::endl;
+//     if(fs::exists(name))
+//     {
+//         std::cout << "Warning: file already exists. Overwriting..." << std::endl; 
+//         fs::remove(name);
+//     }
+//     File file(name, File::ReadWrite | File::Create | File::Truncate);
+
+//     Group h5md = file.createGroup("/h5md");
+//     Group particles = file.createGroup("/particles");
+//     Group observables = file.createGroup("/observables");
+//     Group parameters = file.createGroup("/parameters");
+
+//     //Subgroups of "parameters"
+//     DataSet dim_value = file.createDataSet<int>("/parameters/dimensions", DataSpace::From(theSys.dim));
+//     dim_value.write(theSys.dim);
+
+//     //Subgroups of "observables"
+//     Group potential_energy = file.createGroup("/observables/potential_energy");
+
+//     //Subgroups of "particles"
+//     Group all_particles = file.createGroup("particles/all");
+//     Group box = file.createGroup("/particles/all/box");
+//     Group position = file.createGroup("/particles/all/position");
+//     Group velocity = file.createGroup("/particles/all/velocity");
+//     Group conservative_force = file.createGroup("/particles/all/conservative_force");
+//     Group active_force = file.createGroup("/particles/all/active_force");
+//     Group active_div = file.createGroup("/particles/all/active_divergence");
+//     Group image = file.createGroup("/particles/all/image");
+
+//     //Sugroups of "connectivity"
+//     if(theSys.is_network){
+//         if(theSys.can_bonds_break==0) {
+
+//             std::vector<int> bonds_to;
+//             std::vector<int> bonds_from;
+
+//             //Get connectivity
+//             std::vector<std::vector<int>> bond_list = theSys.get_connectivity();
+//             for(int i=0; i<bond_list.size(); i++) {
+//                 bonds_from.push_back(bond_list[i][0]+1);
+//                 bonds_to.push_back(bond_list[i][1]+1);
+//             }
+
+//             //write connectivity to file
+//             DataSet all_bonds_from = file.createDataSet<int>("/parameters/vmd_structure/bond_from", DataSpace::From(bonds_from));
+//             all_bonds_from.write(bonds_from);
+
+//             DataSet all_bonds_to = file.createDataSet<int>("/parameters/vmd_structure/bond_to", DataSpace::From(bonds_to));
+//             all_bonds_to.write(bonds_to);
+
+//             Reference myRef1 = Reference(file, all_particles);
+//             Attribute bonds_to_group = all_bonds_to.createAttribute<Reference>("particles_group", DataSpace::From(myRef1));
+//             bonds_to_group.write(myRef1);
+//             Reference myRef2 = Reference(file, all_particles);
+//             Attribute bonds_from_group = all_bonds_from.createAttribute<Reference>("particles_group", DataSpace::From(myRef2));
+//             bonds_from_group.write(myRef2);
+//         }
+//         else {
+//             Group connectivity = file.createGroup("/particles/all/connectivity");
+//         }
+//     }
+
+//     //Assets of "box"
+//     std::vector<std::string> boundary_types(theSys.dim);
+
+//     for (int d=0; d<theSys.dim; d++) {
+//         if (theSys.is_periodic[d]) {
+//             boundary_types[d] = "periodic";
+//         }
+//         else {
+//             boundary_types[d] = "none";
+//         }
+//     }
+
+//     Attribute box_dimension = box.createAttribute<int>("dimension", DataSpace::From(theSys.dim));
+//     box_dimension.write(theSys.dim);
+
+//     Attribute box_boundary = box.createAttribute<std::string>("boundary", DataSpace::From(boundary_types));
+//     box_boundary.write(boundary_types);
+
+//     DataSet edge_values = file.createDataSet<double>("/particles/all/box/edges", DataSpace::From(theSys.edges));
+//     edge_values.write(theSys.edges);
+// }
+
+// void Observer::dump_h5md(System &theSys, std::string subdir)
+// {
+//     //Write trajectory data in the h5md format
+//     using namespace HighFive;
+//     try
+//     {
+//         std::string name = output_dir + subdir + "/traj.h5";
+//         if(!fs::exists(name))
+//         {
+//             std::cout << "Error: file does not exist!" << std::endl; 
+//             exit(0);
+//         }
+//         File file(name, File::ReadWrite);
+
+//         //Create necessary data structures for storage
+//         std::vector<std::vector<std::vector<double>>> all_pos(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
+//         std::vector<std::vector<std::vector<double>>> all_vel(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
+//         std::vector<std::vector<std::vector<double>>> all_conservative_force(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
+//         std::vector<std::vector<std::vector<double>>> all_active_force(1, std::vector<std::vector<double>>(theSys.N, std::vector<double>(3,0.0)));
+//         std::vector<std::vector<double>> all_active_div(1, std::vector<double>(theSys.N, 0.0));
+//         std::vector<std::vector<std::vector<int>>> all_image(1, std::vector<std::vector<int>>(theSys.N, std::vector<int>(3,0)));
+
+//         //HDF5 doesn't seem to like variable-length time series data.
+//         //Just put in enough memory for any "physically reasonable" bond arrangmenet
+//         //And ignore (0,0) bonds in output
+//         int nbonds = 24*theSys.N; //Max limit to bonds per particle//theSys.get_num_bonds();
+//         std::vector<std::vector<std::vector<int>>> all_bonds(1, std::vector<std::vector<int>>(nbonds, std::vector<int>(2,0)));
+
+//         DataSpace part_val_space = DataSpace({1,theSys.N,3},{DataSpace::UNLIMITED, theSys.N,3});
+//         DataSpace part_single_val_space = DataSpace({1,theSys.N},{DataSpace::UNLIMITED, theSys.N});
+//         DataSpace part_t_space = DataSpace({1},{DataSpace::UNLIMITED});
+//         DataSpace part_bond_space = DataSpace({1,nbonds,2},{DataSpace::UNLIMITED, nbonds,2});
+//         DataSetCreateProps props_val;
+//         props_val.add(Chunking(std::vector<hsize_t>{1,theSys.N,3}));
+//         DataSetCreateProps props_single_val;
+//         props_single_val.add(Chunking(std::vector<hsize_t>{1,theSys.N}));
+//         DataSetCreateProps props_time;
+//         props_time.add(Chunking(std::vector<hsize_t>{1}));
+//         DataSetCreateProps props_bond;
+//         props_bond.add(Chunking(std::vector<hsize_t>{1,nbonds,2}));
+
+//         //Fill in positions and velocities
+//         for (int i=0; i<theSys.N; i++) {
+//             for (int j=0; j<theSys.dim; j++) {
+//                 all_pos[0][i][j] = theSys.particles[i].pos(j);
+//                 all_vel[0][i][j] = theSys.particles[i].vel(j);
+//                 all_conservative_force[0][i][j] = theSys.particles[i].conservative_force(j);
+//                 all_active_force[0][i][j] = theSys.particles[i].active_force(j);
+//                 all_image[0][i][j] = theSys.image[i][j];
+//             }
+//             all_active_div[0][i] = theSys.particles[i].active_div;
+//         }
+
+//         //Get bonds
+//         std::vector<std::vector<int>> bond_list = theSys.get_connectivity();
+//         for(int i=0; i<theSys.get_num_bonds(); i++){
+//             all_bonds[0][i][0] = bond_list[i][0];
+//             all_bonds[0][i][1] = bond_list[i][1];
+//         }
+
+//         //Update position
+//         if (!file.exist("/particles/all/position/step")) {
+//             //std::cout << "creating position data" << std::endl;
+//             DataSet step = file.createDataSet<int>("/particles/all/position/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/particles/all/position/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<double>("/particles/all/position/value", part_val_space, props_val);
+//             value.select({0,0,0},{1,theSys.N,3}).write(all_pos);
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/particles/all/position/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/particles/all/position/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update position values
+//             DataSet value = file.getDataSet("/particles/all/position/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_pos);
+//         }
+
+//         //Update velocity
+//         if (!file.exist("/particles/all/velocity/step")) {
+//             //std::cout << "creating velocity data" << std::endl;
+//             DataSet step = file.createDataSet<int>("/particles/all/velocity/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/particles/all/velocity/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<double>("/particles/all/velocity/value", part_val_space, props_val);
+//             value.select({0,0,0},{1,theSys.N,3}).write(all_vel);
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/particles/all/velocity/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/particles/all/velocity/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update velocity values
+//             DataSet value = file.getDataSet("/particles/all/velocity/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_vel);
+//         }
+
+//         //Update conservative force
+//         if (!file.exist("/particles/all/conservative_force/step")) {
+//             //std::cout << "creating conservative_force data" << std::endl;
+//             DataSet step = file.createDataSet<int>("/particles/all/conservative_force/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/particles/all/conservative_force/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<double>("/particles/all/conservative_force/value", part_val_space, props_val);
+//             value.select({0,0,0},{1,theSys.N,3}).write(all_conservative_force);
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/particles/all/conservative_force/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/particles/all/conservative_force/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update conservative_force values
+//             DataSet value = file.getDataSet("/particles/all/conservative_force/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_conservative_force);
+//         }
+
+//         //Update active force
+//         if (!file.exist("/particles/all/active_force/step")) {
+//             //std::cout << "creating active_force data" << std::endl;
+//             DataSet step = file.createDataSet<int>("/particles/all/active_force/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/particles/all/active_force/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<double>("/particles/all/active_force/value", part_val_space, props_val);
+//             value.select({0,0,0},{1,theSys.N,3}).write(all_active_force);
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/particles/all/active_force/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/particles/all/active_force/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update active_force values
+//             DataSet value = file.getDataSet("/particles/all/active_force/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_active_force);
+//         }
+
+//         //Update active divergence
+//         if (!file.exist("/particles/all/active_divergence/step")) {
+//             //std::cout << "creating active_force data" << std::endl;
+//             DataSet step = file.createDataSet<int>("/particles/all/active_divergence/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/particles/all/active_divergence/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<double>("/particles/all/active_divergence/value", part_single_val_space, props_single_val);
+//             value.select({0,0},{1,theSys.N}).write(all_active_div);
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/particles/all/active_divergence/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/particles/all/active_divergence/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update active_div values
+//             DataSet value = file.getDataSet("/particles/all/active_divergence/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select({value_dim_old[0],0},{1,theSys.N}).write(all_active_div);
+//         }
+
+//         //Update image
+//         if (!file.exist("/particles/all/image/step")) {
+//             DataSet step = file.createDataSet<int>("/particles/all/image/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/particles/all/image/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<int>("/particles/all/image/value", part_val_space, props_val);
+//             value.select({0,0,0},{1,theSys.N,3}).write(all_image);
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/particles/all/image/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/particles/all/image/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update image values
+//             DataSet value = file.getDataSet("/particles/all/image/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select({value_dim_old[0],0,0},{1,theSys.N,3}).write(all_image);
+//         }
+
+//         //Update connectivity
+//         if (!file.exist("/particles/all/connectivity/step")) {
+//             //std::cout << "creating connectivity data" << std::endl;
+//             DataSet step = file.createDataSet<int>("/particles/all/connectivity/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/particles/all/connectivity/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<int>("/particles/all/connectivity/value", part_bond_space, props_bond);
+//             value.select({0,0,0},{1,nbonds,2}).write(all_bonds);
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/particles/all/connectivity/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/particles/all/connectivity/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update connectivity values
+//             DataSet value = file.getDataSet("/particles/all/connectivity/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select({value_dim_old[0],0,0},{1,nbonds,2}).write(all_bonds);
+//         }
+
+//         //Update energy
+//         if (!file.exist("/observables/potential_energy/step")) {
+//             //std::cout << "creating energy data" << std::endl;
+//             DataSet step = file.createDataSet<int>("/observables/potential_energy/step", part_t_space, props_time);
+//             step.write(theSys.time);
+//             DataSet time = file.createDataSet<double>("/observables/potential_energy/time", part_t_space, props_time);
+//             time.write(theSys.time*theSys.dt);
+//             DataSet value = file.createDataSet<double>("/observables/potential_energy/value", part_t_space, props_time);
+//             value.write(theSys.get_energy());
+//         }
+//         else {
+//             //Update step
+//             DataSet step = file.getDataSet("/observables/potential_energy/step");
+//             std::vector<long unsigned int> step_dim = step.getDimensions();
+//             std::vector<long unsigned int> step_dim_old = step_dim;
+//             step_dim[0] += 1;
+//             step.resize(step_dim);
+//             step.select(step_dim_old,{1}).write(theSys.time);
+
+//             //Update time
+//             DataSet time = file.getDataSet("/observables/potential_energy/time");
+//             std::vector<long unsigned int> time_dim = time.getDimensions();
+//             std::vector<long unsigned int> time_dim_old = time_dim;
+//             time_dim[0] += 1;
+//             time.resize(time_dim);
+//             time.select(time_dim_old,{1}).write(theSys.time*theSys.dt);
+
+//             //Update energy values
+//             DataSet value = file.getDataSet("/observables/potential_energy/value");
+//             std::vector<long unsigned int> value_dim = value.getDimensions();
+//             std::vector<long unsigned int> value_dim_old = value_dim;
+//             value_dim[0] += 1;
+//             value.resize(value_dim);
+//             value.select(value_dim_old,{1}).write(theSys.get_energy());
+//         }
+//     }
+//     catch(Exception& err)
+//     {
+//         std::cerr << err.what() << std::endl;
+//     }
+// }

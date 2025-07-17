@@ -10,6 +10,7 @@
 #define LABBENCH_HPP
 
 #include <string>
+#include <iostream>
 
 #include "System.hpp"
 #include "MC.hpp"
@@ -24,6 +25,7 @@ public:
     Observer obs;
     MC solver;
     gsl_rng *rg;
+    int seed;
 
     std::string simulation = "standard";
     int equil_steps = 0;
@@ -39,6 +41,7 @@ public:
     ~LabBench();
 
     //run trajectory
+    void run_equil(int nstps=-1);
     void run(int nstps=-1, std::string subdir="/", int config_freq=-1, int therm_freq=-1);
 
     //ffs functions

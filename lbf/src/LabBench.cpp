@@ -11,9 +11,18 @@ LabBench::LabBench(ParamDict& theParams, gsl_rng*& theGen) : sys(theParams, theG
     if(theParams.is_key("production_steps")) production_steps = std::stoi(theParams.get_value("production_steps"));
     if(theParams.is_key("info_freq")) info_freq = std::stoi(theParams.get_value("info_freq"));
     if(theParams.is_key("simulation")) simulation = theParams.get_value("simulation");
+    if(theParams.is_key("seed")) seed = std::stoi(theParams.get_value("seed"));
 }
 
 LabBench::~LabBench() {}
+
+void LabBench::run_equil(int nstps)
+{
+    if (nstps==-1) nstps = this->equil_steps;
+    std::cout << "Running equilibration for " << nstps << " steps." << std::endl;
+    solver.run_relax(sys, nstps);
+    std::cout << "Equilibration complete." << std::endl;
+}
 
 void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_freq)
 {
@@ -21,19 +30,226 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     if (config_freq==-1) config_freq = this->obs.particles_freq;
     if (therm_freq==-1) therm_freq = this->obs.thermo_freq;
 
-    if (obs.do_h5md==1) {
-        obs.open_h5md(sys, subdir);
-    }
+    time_t timer1, timer2;
+    int seconds;
+    time(&timer1);
+    int frame = 0; //track how many configurations have been written
+    int monomeradded = 0;
+    int dimeradded = 0;
+    int monomerremoved = 0;
+    int dimerremoved = 0;
+    int drugadded = 0;
+    int drugremoved = 0;
+    int typechanged = 0;
+    int fusion = 0;
+    int fission = 0;
+    int wedgefusion = 0;
+    int wedgefission = 0;
+    int boundtri = 0;
+    int deletednorate = 0;
+
+    int minHE_update_neigh = 150;
+    int lastNhe = 0;
+    int lastNheGrowth=0;
+    int npace=0;
+    double avgpace=0;
+    int avgAddInterval=10000;
+
+    //Write out parameters to file
+    obs.dump_parameters(sys, subdir);
+
+    // set up an output file
+    FILE *ofile, *finalfile, *fi, *paramfile;
+
+    ofile = fopen((obs.output_dir + "/energy.dat").c_str(), "a");
+    
+    // if (obs.do_h5md==1) {
+    //     obs.open_h5md(sys, subdir);
+    // }
 
     for (int i=0; i<nstps; i++) {
         //Record data
         if (i%info_freq==0) std::cout << "step " << i << std::endl;
 
-        if (obs.do_h5md==1) {
-            if (i%config_freq==0) {
-                obs.dump_h5md(sys, subdir);
+        // if (obs.do_h5md==1) {
+        //     if (i%config_freq==0) {
+        //         obs.dump_h5md(sys, subdir);
+        //     }
+        // }
+
+
+        //Do some checks and output data
+        double ee = 0;
+        if (i % (obs.freq_log) == 0 ) 
+        {
+            
+            if (sys.Nhe==6) recenter(sys);
+            sys.update_boundary();
+            sys.check_odd_neigh();
+            ee = sys.compute_energy();
+
+            dump_lammps_traj_dimers(sys, i);
+
+            time(&timer2);
+            seconds = difftime(timer2, timer1);
+
+            dump_analysis(sys, ofile, i, seed, seconds);
+            dump_lammps_data_file(sys, 22222222);
+            //dump_lammps_traj_restart(g, sweep);
+            dump_lammps_data_dimers(sys, 11111111);
+
+            dump_restart_lammps_data_file(sys, i);
+        }
+
+        if (i % obs.print_freq == 0 )
+        {
+            time(&timer2);
+            seconds = difftime(timer2, timer1);
+            cout << "###################################################################" << endl;
+            cout << " ################ RUN TIME " << seconds << " SECONDS ###############" << endl;
+            cout << " ############# SWEEP " << i << "##############" << endl;
+            cout << "######### FRAME " << frame << " ##############" << endl;
+            cout << "######### ENERGY " << ee << " ##############" << endl;
+            cout << "######### ENERGY PER DIMER " << 2 * ee / sys.Nhe << " ##############" << endl;
+            cout << "#########  NHE " << sys.Nhe << " #######################" << endl;
+            cout << "#########  NHESURF " << sys.boundary.size() << " ##############" << endl;
+            cout << "#########  NVSURF " << sys.boundaryv.size() << " ##############" << endl;
+            cout << "#########  NV_BONDSURF " << sys.boundaryvbond.size() << " ##############" << endl;
+            cout << "#########  NV5 " << sys.Nv5 << " ##############" << endl;
+            cout << "#########  MONOMER ADDED " << monomeradded << " ##############" << endl;
+            cout << "#########  MONOMER REMOVED " << monomerremoved << " ##############" << endl;
+            cout << "#########  DIMER ADDED " << dimeradded << " ##############" << endl;
+            cout << "#########  DIMER REMOVED " << dimerremoved << " ##############" << endl;
+            cout << "#########  no rate REMOVED " << deletednorate << " ##############" << endl;
+            cout << "#########  Surface bound " << solver.binding << " ##############" << endl;
+            cout << "#########  Surface Unbound " << solver.unbinding << " ##############" << endl;
+            cout << "#########  DrugAdded " << drugadded << " ##############" << endl;
+            cout << "#########  DrugRemoved " << drugremoved << " ##############" << endl;
+            cout << "#########  ND " << sys.Nd << " ##############" << endl;
+            cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
+            cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
+            cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
+            cout << "#########  FUSION " << fusion << " ##############" << endl;
+            cout << "#########  FISSION " << fission << " ##############" << endl;
+            cout << "#########  FUSION HALFEDGES " << sys.fusionhe.size() << " ##############" << endl;
+            cout << "#########  WEDGE FUSION HALFEDGES " << sys.fusionwedgehe.size() << " ##############" << endl;
+            cout << "#########  ALL NEIGH " << sys.all_neigh << " ##############" << endl;
+            cout << "#########  Nboundary " << sys.Nboundary << " ##############" << endl;
+            cout << "#########  Bound Triangle " << boundtri << " ##############" << endl;
+            cout << "#########  Acceptance vmove " << (1.0 * sys.accepted_vmove) / (1.0 * (sys.accepted_vmove + sys.rejected_vmove)) << "#################" << endl;
+            cout << "#########  Nvlast " << sys.Nvlast << " Nhelast " << sys.Nhelast << " ################" << endl;
+            cout << "#########  T4 " << sys.NCD_T4_in << " T3 " << sys.NCD_T3_in << " ################" << endl;
+            cout << "#########  NCD_Hex" << sys.NCD_Hex << "#################"<<endl;
+            cout << "#########  avgAddInterval "<<avgAddInterval<<" ###############"<<endl;
+        }
+
+        int cc = check_bind_triangle(sys);
+        if (cc > 0)
+        {
+            cout << "bound triangle" << endl;
+            sys.update_boundary();
+            boundtri += cc;
+        }
+
+        sys.check_odd_neigh();
+
+        if (sys.Nhe>70 && sys.Nhe < minHE_update_neigh && i % 10000 == 0)
+        {
+            double thispace=float(sys.Nhe-lastNhe)/10000.0; //pace of adding Nhe per sweep_count
+            cout << "thispace "<< thispace <<endl;
+
+            avgpace=(npace*avgpace+thispace)/(npace+1.0); //average pace of adding 
+
+            avgAddInterval=int(pow(10,(-1 * int(floor(log10(avgpace))) ) ) );
+            cout << "avgpace" << avgpace << " avgAddInterval " <<avgAddInterval << endl;
+            
+            npace++;
+            lastNhe=sys.Nhe;
+        }
+
+        if (sys.Nhe > minHE_update_neigh && i % 10000 == 0)
+        {
+            sys.update_neigh();
+            if (sys.find_overlap_all() < 0)
+            {
+                cout << "error overlap" << endl;
+                dump_lammps_data_dimers(sys, 5555555);
+                exit(-1);
             }
         }
+        //see if capsid is growing or it is stalled in mixed morphology
+        if (sys.Nhe > minHE_update_neigh && i % (10*avgAddInterval) == 0)
+        {    
+            sys.update_geometry_parameters();
+            if ( sys.Nhe - lastNhe<=2 ){
+                if ((sys.Nhe >= 220 && sys.NCD_T4_in >=26 && sys.NCD_T3_in >= 3  && sys.Nsurf > 10 ) || 
+                    (sys.Nhe >= 160 && sys.NCD_T4_in >= 3 && sys.NCD_T3_in >=16  && sys.Nsurf > 10) || 
+                    (sys.Nhe >= 200 && sys.NCD_T4_in >= 5 && sys.NCD_T3_in >=5  && sys.Nsurf > 10) )
+                    {
+            //         cout << "STOP for now - mixed morph" << endl;
+                        sys.update_boundary();
+                        dump_lammps_traj_dimers(sys, int(i));
+                        dump_lammps_data_dimers(sys, 44444444);
+                        dump_lammps_data_dimers(sys, 11111111);
+                        time(&timer2);
+                        seconds = difftime(timer2, timer1);
+                        dump_analysis(sys, ofile, i, seed, seconds);
+            //           exit(-1);
+                    }
+            }
+            
+            
+            if (i % (100*avgAddInterval) == 0)
+            {
+
+                if (sys.NCD_T4_in>0 && sys.NCD_T3_in>0 && abs( sys.Nhe - lastNheGrowth)<=4 ){
+                    fprintf(stderr, "STOP for now - not growing\n");
+                    sys.update_boundary();
+                    //dump_lammps_traj_dimers(g, int(sweep_count));
+                    dump_lammps_data_dimers(sys, 333333333);
+                    dump_lammps_data_dimers(sys, 11111111);
+                    dump_restart_lammps_data_file(sys, i);
+                    time(&timer2);
+                    seconds = difftime(timer2, timer1);
+                    dump_analysis(sys, ofile, i, seed, seconds);
+                //  exit(-1);
+                }
+                lastNheGrowth = sys.Nhe;
+            }
+            lastNhe = sys.Nhe;
+        }
+
+        if (i == 200000000)
+        {
+
+            fprintf(stderr, "STOP for now - too long\n");
+            sys.update_boundary();
+            dump_lammps_traj_dimers(sys, int(i));
+            //dump_lammps_traj_restart(sys, int(sweep_count));
+            dump_lammps_data_dimers(sys, 77777777);
+            dump_restart_lammps_data_file(sys, i);
+            time(&timer2);
+            seconds = difftime(timer2, timer1);
+            dump_analysis(sys, ofile, i, seed, seconds);
+            exit(-1);
+        }
+
+        if (sys.Nhe >= 310 || sys.Nv >= 65)
+        {
+
+        // fprintf(stderr, "STOP for now - too large\n");
+            sys.update_boundary();
+            dump_lammps_traj_dimers(sys, int(i));
+            dump_lammps_data_dimers(sys, 88888888);
+            dump_lammps_data_dimers(sys, 11111111);
+            dump_restart_lammps_data_file(sys, i);
+            time(&timer2);
+            seconds = difftime(timer2, timer1);
+            dump_analysis(sys, ofile, i, seed, seconds);
+        // exit(-1);
+        }
+        //sweep_count++;
+
         //Advance dynamics
         solver.sweep(sys);
     }
@@ -62,7 +278,7 @@ void LabBench::do_simulation(std::string expt)
 void LabBench::run_standard_simulation()
 {
     std::cout << "Equilibrating..." << std::endl;
-    this->run(this->equil_steps, "/equil", this->obs.particles_freq, this->obs.thermo_freq);
+    this->run_equil(this->equil_steps);
 
     std::cout << "Doing production run..." << std::endl;
     this->run(this->production_steps, "/prod", this->obs.particles_freq, this->obs.thermo_freq);
@@ -72,8 +288,8 @@ void LabBench::run_standard_simulation()
 /*** Forward Flux Sampling ****/
 /******************************/
 
-// auto LabBench::run_ffs_stage1(int N0, double l0, double la, double lb)
-// {
+auto LabBench::run_ffs_stage1(int N0, double l0, double la, double lb)
+{
 //     //This function has to be placed before "run_ffs_simulation"
 //     //because of the use of auto return type
 //     //TODO: handle case where system reaches state B (rare but possible)
@@ -122,10 +338,10 @@ void LabBench::run_standard_simulation()
     
 
 //     return result {time, configs};
-// }
+}
 
-// void LabBench::run_ffs_simulation()
-// {
+void LabBench::run_ffs_simulation()
+{
 //     //Do forward flux sampling (ffs) using original "direct" algorithm
 //     //INPUT:
 //     //  -N0 (number of points at first interface)
@@ -325,7 +541,7 @@ void LabBench::run_standard_simulation()
 //             }
 //         }        
 //     }
-// }
+}
 
 /******************************/
 /*** Umbrella Sampling ********/

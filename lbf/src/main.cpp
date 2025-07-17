@@ -9,7 +9,7 @@
 
 using namespace std;
 namespace fs = std::filesystem;
-void determine_seed(long unsigned int &seed, std::string seed_file, ParamDict &myParams);
+//void determine_seed(long unsigned int &seed, std::string seed_file, ParamDict &myParams);
 
 int main(int argc, char * argv[])
 {
@@ -24,9 +24,12 @@ int main(int argc, char * argv[])
 
     ParamDict myParams;
     myParams.read_params(input_file);
+    std::cout << "Read parameters." << std::endl;
 
     //Seed RNG
     determine_seed(seed, seed_file, myParams);
+    //Set seed in ParamDict
+    myParams.add_entry("seed", std::to_string(seed));
     std::cout << myParams.get_value("output_dir") << std::endl;
 
     std::cout << "Using seed: " << seed << std::endl;

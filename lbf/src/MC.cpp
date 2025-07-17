@@ -8,6 +8,7 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
 
     //***Set RNG***
     rg = the_rg;
+
 }
 
 MC::~MC() 
@@ -22,258 +23,260 @@ void MC::run_relax(System &g, int nsteps)
     }
 }
 
-void MC::run_production(System &g, int nsteps)
-{
-    for (int n=0; n<nsteps; n++){
-        sweep(g);
-        double ee = 0;
-        if (sweep_count % (freq_log) == 0 ) 
-        {
+// void MC::run_production(System &g, int nsteps)
+// {
+
+//     for (int n=0; n<nsteps; n++){
+//         sweep(g);
+//         double ee = 0;
+//         if (sweep_count % (g.get_obs().freq_log) == 0 ) 
+//         {
             
-            if (g.Nhe==6) recenter(g);
-            g.update_boundary();
-            g.check_odd_neigh();
-            ee = g.compute_energy();
+//             if (g.Nhe==6) recenter(g);
+//             g.update_boundary();
+//             g.check_odd_neigh();
+//             ee = g.compute_energy();
 
-            dump_lammps_traj_dimers(g, sweep_count);
+//             dump_lammps_traj_dimers(g, sweep_count);
 
-            time(&timer2);
-            seconds = difftime(timer2, timer1);
+//             time(&timer2);
+//             seconds = difftime(timer2, timer1);
 
-            dump_analysis(g, ofile, sweep_count, seed, seconds);
-            dump_lammps_data_file(g, 22222222);
-            //dump_lammps_traj_restart(g, sweep);
-            dump_lammps_data_dimers(g, 11111111);
+//             dump_analysis(g, ofile, sweep_count, seed, seconds);
+//             dump_lammps_data_file(g, 22222222);
+//             //dump_lammps_traj_restart(g, sweep);
+//             dump_lammps_data_dimers(g, 11111111);
 
-            dump_restart_lammps_data_file(g, sweep_count);
-        }
+//             dump_restart_lammps_data_file(g, sweep_count);
+//         }
 
-        if (sweep_count % freq_out == 0 )
-        {
-            time(&timer2);
-            seconds = difftime(timer2, timer1);
-            cout << "###################################################################" << endl;
-            cout << " ################ RUN TIME " << seconds << " SECONDS ###############" << endl;
-            cout << " ############# SWEEP " << sweep_count << "##############" << endl;
-            cout << "######### FRAME " << frame << " ##############" << endl;
-            cout << "######### ENERGY " << ee << " ##############" << endl;
-            cout << "######### ENERGY PER DIMER " << 2 * ee / g.Nhe << " ##############" << endl;
-            cout << "#########  NHE " << g.Nhe << " #######################" << endl;
-            cout << "#########  NHESURF " << g.boundary.size() << " ##############" << endl;
-            cout << "#########  NVSURF " << g.boundaryv.size() << " ##############" << endl;
-            cout << "#########  NV_BONDSURF " << g.boundaryvbond.size() << " ##############" << endl;
-            cout << "#########  NV5 " << g.Nv5 << " ##############" << endl;
-            cout << "#########  MONOMER ADDED " << monomeradded << " ##############" << endl;
-            cout << "#########  MONOMER REMOVED " << monomerremoved << " ##############" << endl;
-            cout << "#########  DIMER ADDED " << dimeradded << " ##############" << endl;
-            cout << "#########  DIMER REMOVED " << dimerremoved << " ##############" << endl;
-            cout << "#########  no rate REMOVED " << deletednorate << " ##############" << endl;
-            cout << "#########  Surface bound " << binding << " ##############" << endl;
-            cout << "#########  Surface Unbound " << unbinding << " ##############" << endl;
-            cout << "#########  DrugAdded " << drugadded << " ##############" << endl;
-            cout << "#########  DrugRemoved " << drugremoved << " ##############" << endl;
-            cout << "#########  ND " << g.Nd << " ##############" << endl;
-            cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
-            cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
-            cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
-            cout << "#########  FUSION " << fusion << " ##############" << endl;
-            cout << "#########  FISSION " << fission << " ##############" << endl;
-            cout << "#########  FUSION HALFEDGES " << g.fusionhe.size() << " ##############" << endl;
-            cout << "#########  WEDGE FUSION HALFEDGES " << g.fusionwedgehe.size() << " ##############" << endl;
-            cout << "#########  ALL NEIGH " << g.all_neigh << " ##############" << endl;
-            cout << "#########  Nboundary " << g.Nboundary << " ##############" << endl;
-            cout << "#########  Bound Triangle " << boundtri << " ##############" << endl;
-            cout << "#########  Acceptance vmove " << (1.0 * g.accepted_vmove) / (1.0 * (g.accepted_vmove + g.rejected_vmove)) << "#################" << endl;
-            cout << "#########  Nvlast " << g.Nvlast << " Nhelast " << g.Nhelast << " ################" << endl;
-            cout << "#########  T4 " << g.NCD_T4_in << " T3 " << g.NCD_T3_in << " ################" << endl;
-        cout << "#########  NCD_Hex" << g.NCD_Hex << "#################"<<endl;
-            cout << "#########  avgAddInterval "<<avgAddInterval<<" ###############"<<endl;
-        }
+//         if (sweep_count % freq_out == 0 )
+//         {
+//             time(&timer2);
+//             seconds = difftime(timer2, timer1);
+//             cout << "###################################################################" << endl;
+//             cout << " ################ RUN TIME " << seconds << " SECONDS ###############" << endl;
+//             cout << " ############# SWEEP " << sweep_count << "##############" << endl;
+//             cout << "######### FRAME " << frame << " ##############" << endl;
+//             cout << "######### ENERGY " << ee << " ##############" << endl;
+//             cout << "######### ENERGY PER DIMER " << 2 * ee / g.Nhe << " ##############" << endl;
+//             cout << "#########  NHE " << g.Nhe << " #######################" << endl;
+//             cout << "#########  NHESURF " << g.boundary.size() << " ##############" << endl;
+//             cout << "#########  NVSURF " << g.boundaryv.size() << " ##############" << endl;
+//             cout << "#########  NV_BONDSURF " << g.boundaryvbond.size() << " ##############" << endl;
+//             cout << "#########  NV5 " << g.Nv5 << " ##############" << endl;
+//             cout << "#########  MONOMER ADDED " << monomeradded << " ##############" << endl;
+//             cout << "#########  MONOMER REMOVED " << monomerremoved << " ##############" << endl;
+//             cout << "#########  DIMER ADDED " << dimeradded << " ##############" << endl;
+//             cout << "#########  DIMER REMOVED " << dimerremoved << " ##############" << endl;
+//             cout << "#########  no rate REMOVED " << deletednorate << " ##############" << endl;
+//             cout << "#########  Surface bound " << binding << " ##############" << endl;
+//             cout << "#########  Surface Unbound " << unbinding << " ##############" << endl;
+//             cout << "#########  DrugAdded " << drugadded << " ##############" << endl;
+//             cout << "#########  DrugRemoved " << drugremoved << " ##############" << endl;
+//             cout << "#########  ND " << g.Nd << " ##############" << endl;
+//             cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
+//             cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
+//             cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
+//             cout << "#########  FUSION " << fusion << " ##############" << endl;
+//             cout << "#########  FISSION " << fission << " ##############" << endl;
+//             cout << "#########  FUSION HALFEDGES " << g.fusionhe.size() << " ##############" << endl;
+//             cout << "#########  WEDGE FUSION HALFEDGES " << g.fusionwedgehe.size() << " ##############" << endl;
+//             cout << "#########  ALL NEIGH " << g.all_neigh << " ##############" << endl;
+//             cout << "#########  Nboundary " << g.Nboundary << " ##############" << endl;
+//             cout << "#########  Bound Triangle " << boundtri << " ##############" << endl;
+//             cout << "#########  Acceptance vmove " << (1.0 * g.accepted_vmove) / (1.0 * (g.accepted_vmove + g.rejected_vmove)) << "#################" << endl;
+//             cout << "#########  Nvlast " << g.Nvlast << " Nhelast " << g.Nhelast << " ################" << endl;
+//             cout << "#########  T4 " << g.NCD_T4_in << " T3 " << g.NCD_T3_in << " ################" << endl;
+//         cout << "#########  NCD_Hex" << g.NCD_Hex << "#################"<<endl;
+//             cout << "#########  avgAddInterval "<<avgAddInterval<<" ###############"<<endl;
+//         }
 
-        int cc = check_bind_triangle(g);
-        if (cc > 0)
-        {
-            cout << "bound triangle" << endl;
-            g.update_boundary();
-            boundtri += cc;
-        }
+//         int cc = check_bind_triangle(g);
+//         if (cc > 0)
+//         {
+//             cout << "bound triangle" << endl;
+//             g.update_boundary();
+//             boundtri += cc;
+//         }
 
-        g.check_odd_neigh();
+//         g.check_odd_neigh();
         
-        if (g.Nhe>70 && g.Nhe < minHE_update_neigh && sweep_count % 10000 == 0)
-        {
-            double thispace=float(g.Nhe-lastNhe)/10000.0; //pace of adding Nhe per sweep_count
-            cout << "thispace "<< thispace <<endl; 
+//         if (g.Nhe>70 && g.Nhe < minHE_update_neigh && sweep_count % 10000 == 0)
+//         {
+//             double thispace=float(g.Nhe-lastNhe)/10000.0; //pace of adding Nhe per sweep_count
+//             cout << "thispace "<< thispace <<endl; 
             
-            avgpace=(npace*avgpace+thispace)/(npace+1.0); //average pace of adding 
+//             avgpace=(npace*avgpace+thispace)/(npace+1.0); //average pace of adding 
 
-            avgAddInterval=int(pow(10,(-1 * int(floor(log10(avgpace))) ) ) );
-            cout << "avgpace" << avgpace << " avgAddInterval " <<avgAddInterval << endl;
+//             avgAddInterval=int(pow(10,(-1 * int(floor(log10(avgpace))) ) ) );
+//             cout << "avgpace" << avgpace << " avgAddInterval " <<avgAddInterval << endl;
             
-            npace++;
-            lastNhe=g.Nhe;
-        }
+//             npace++;
+//             lastNhe=g.Nhe;
+//         }
 
-        if (g.Nhe > minHE_update_neigh && sweep_count % 10000 == 0)
-        {
-            g.update_neigh();
-            if (g.find_overlap_all() < 0)
-            {
-                cout << "error overlap" << endl;
-                dump_lammps_data_dimers(g, 5555555);
-                exit(-1);
-            }
-        }
-        //see if capsid is growing or it is stalled in mixed morphology
-        if (g.Nhe > minHE_update_neigh && sweep_count % (10*avgAddInterval) == 0)
-        {    
-            update_geometry_parameters(g);
-            if ( g.Nhe - lastNhe<=2 ){
-                if ((g.Nhe >= 220 && g.NCD_T4_in >=26 && g.NCD_T3_in >= 3  && g.Nsurf > 10 ) || 
-                    (g.Nhe >= 160 && g.NCD_T4_in >= 3 && g.NCD_T3_in >=16  && g.Nsurf > 10) || 
-                    (g.Nhe >= 200 && g.NCD_T4_in >= 5 && g.NCD_T3_in >=5  && g.Nsurf > 10) )
-                    {
-            //         cout << "STOP for now - mixed morph" << endl;
-                        g.update_boundary();
-                        dump_lammps_traj_dimers(g, int(sweep_count));
-                        dump_lammps_data_dimers(g, 44444444);
-                        dump_lammps_data_dimers(g, 11111111);
-                        time(&timer2);
-                        seconds = difftime(timer2, timer1);
-                        dump_analysis(g, ofile, sweep_count, seed, seconds);
-            //           exit(-1);
-                    }
-            }
+//         if (g.Nhe > minHE_update_neigh && sweep_count % 10000 == 0)
+//         {
+//             g.update_neigh();
+//             if (g.find_overlap_all() < 0)
+//             {
+//                 cout << "error overlap" << endl;
+//                 dump_lammps_data_dimers(g, 5555555);
+//                 exit(-1);
+//             }
+//         }
+//         //see if capsid is growing or it is stalled in mixed morphology
+//         if (g.Nhe > minHE_update_neigh && sweep_count % (10*avgAddInterval) == 0)
+//         {    
+//             update_geometry_parameters(g);
+//             if ( g.Nhe - lastNhe<=2 ){
+//                 if ((g.Nhe >= 220 && g.NCD_T4_in >=26 && g.NCD_T3_in >= 3  && g.Nsurf > 10 ) || 
+//                     (g.Nhe >= 160 && g.NCD_T4_in >= 3 && g.NCD_T3_in >=16  && g.Nsurf > 10) || 
+//                     (g.Nhe >= 200 && g.NCD_T4_in >= 5 && g.NCD_T3_in >=5  && g.Nsurf > 10) )
+//                     {
+//             //         cout << "STOP for now - mixed morph" << endl;
+//                         g.update_boundary();
+//                         dump_lammps_traj_dimers(g, int(sweep_count));
+//                         dump_lammps_data_dimers(g, 44444444);
+//                         dump_lammps_data_dimers(g, 11111111);
+//                         time(&timer2);
+//                         seconds = difftime(timer2, timer1);
+//                         dump_analysis(g, ofile, sweep_count, seed, seconds);
+//             //           exit(-1);
+//                     }
+//             }
             
             
-            if (sweep_count % (100*avgAddInterval) == 0)
-            {
+//             if (sweep_count % (100*avgAddInterval) == 0)
+//             {
                 
-                if (g.NCD_T4_in>0 && g.NCD_T3_in>0 && abs( g.Nhe - lastNheGrowth)<=4 ){
-                    fprintf(stderr, "STOP for now - not growing\n");
-                    g.update_boundary();
-                    //dump_lammps_traj_dimers(g, int(sweep_count));
-                    dump_lammps_data_dimers(g, 333333333);
-                    dump_lammps_data_dimers(g, 11111111);
-                    dump_restart_lammps_data_file(g, sweep_count);
-                    time(&timer2);
-                    seconds = difftime(timer2, timer1);
-                    dump_analysis(g, ofile, sweep_count, seed, seconds);
-                //  exit(-1);
-                }
-                lastNheGrowth = g.Nhe;
-            }
-            lastNhe = g.Nhe;            
-        }
+//                 if (g.NCD_T4_in>0 && g.NCD_T3_in>0 && abs( g.Nhe - lastNheGrowth)<=4 ){
+//                     fprintf(stderr, "STOP for now - not growing\n");
+//                     g.update_boundary();
+//                     //dump_lammps_traj_dimers(g, int(sweep_count));
+//                     dump_lammps_data_dimers(g, 333333333);
+//                     dump_lammps_data_dimers(g, 11111111);
+//                     dump_restart_lammps_data_file(g, sweep_count);
+//                     time(&timer2);
+//                     seconds = difftime(timer2, timer1);
+//                     dump_analysis(g, ofile, sweep_count, seed, seconds);
+//                 //  exit(-1);
+//                 }
+//                 lastNheGrowth = g.Nhe;
+//             }
+//             lastNhe = g.Nhe;            
+//         }
 
-        if (sweep_count == 200000000)
-        {
+//         if (sweep_count == 200000000)
+//         {
 
-            fprintf(stderr, "STOP for now - too long\n");
-            g.update_boundary();
-            dump_lammps_traj_dimers(g, int(sweep_count));
-            //dump_lammps_traj_restart(g, int(sweep_count));
-            dump_lammps_data_dimers(g, 77777777);
-            dump_restart_lammps_data_file(g, sweep_count);
-            time(&timer2);
-            seconds = difftime(timer2, timer1);
-            dump_analysis(g, ofile, sweep_count, seed, seconds);
-            exit(-1);
-        }
+//             fprintf(stderr, "STOP for now - too long\n");
+//             g.update_boundary();
+//             dump_lammps_traj_dimers(g, int(sweep_count));
+//             //dump_lammps_traj_restart(g, int(sweep_count));
+//             dump_lammps_data_dimers(g, 77777777);
+//             dump_restart_lammps_data_file(g, sweep_count);
+//             time(&timer2);
+//             seconds = difftime(timer2, timer1);
+//             dump_analysis(g, ofile, sweep_count, seed, seconds);
+//             exit(-1);
+//         }
 
-        if (g.Nhe >= 310 || g.Nv >= 65)
-        {
+//         if (g.Nhe >= 310 || g.Nv >= 65)
+//         {
 
-        // fprintf(stderr, "STOP for now - too large\n");
-            g.update_boundary();
-            dump_lammps_traj_dimers(g, int(sweep_count));
-            dump_lammps_data_dimers(g, 88888888);
-            dump_lammps_data_dimers(g, 11111111);
-            dump_restart_lammps_data_file(g, sweep_count);
-            time(&timer2);
-            seconds = difftime(timer2, timer1);
-            dump_analysis(g, ofile, sweep_count, seed, seconds);
-        // exit(-1);
-        }
-        sweep_count++;
-    }
+//         // fprintf(stderr, "STOP for now - too large\n");
+//             g.update_boundary();
+//             dump_lammps_traj_dimers(g, int(sweep_count));
+//             dump_lammps_data_dimers(g, 88888888);
+//             dump_lammps_data_dimers(g, 11111111);
+//             dump_restart_lammps_data_file(g, sweep_count);
+//             time(&timer2);
+//             seconds = difftime(timer2, timer1);
+//             dump_analysis(g, ofile, sweep_count, seed, seconds);
+//         // exit(-1);
+//         }
+//         sweep_count++;
+//     }
 
-    //dump_lammps_traj_restart(g, int(sweep_count));
-    dump_lammps_traj_dimers(g, int(sweep_count));
+//     //dump_lammps_traj_restart(g, int(sweep_count));
+//     dump_lammps_traj_dimers(g, int(sweep_count));
 
-    //if (g.Nboundary == 1)
-    dump_restart_lammps_data_file(g, sweep_count);
-    //equilibrating final structure
-    for (int rstep = 0; rstep < (10 * freq_log); rstep++)
-    {
-        move_vertices(g, r);
-        g.update_boundary();
-        int ind1 = gsl_rng_uniform_int(r, g.Nhe);
-        int e1 = g.he[ind1].id;
-        int x = -1;
+//     //if (g.Nboundary == 1)
+//     dump_restart_lammps_data_file(g, sweep_count);
+//     //equilibrating final structure
+//     for (int rstep = 0; rstep < (10 * freq_log); rstep++)
+//     {
+//         move_vertices(g, r);
+//         g.update_boundary();
+//         int ind1 = gsl_rng_uniform_int(r, g.Nhe);
+//         int e1 = g.he[ind1].id;
+//         int x = -1;
 
-        //change edge type
-        x = attempt_change_edge_type(g, e1, r);
-        if (x >= 0)
-            typechanged++;
+//         //change edge type
+//         x = attempt_change_edge_type(g, e1, r);
+//         if (x >= 0)
+//             typechanged++;
 
-        if (sweep_count % freq_vis == 0)
-        {
+//         if (sweep_count % freq_vis == 0)
+//         {
 
-            dump_lammps_traj_dimers(g, int(sweep_count));
-        }
-        if (sweep_count % freq_out == 0)
-        {
-            time(&timer2);
-            seconds = difftime(timer2, timer1);
-            cout << "###################################################################" << endl;
-            cout << " ################  RUN TIME " << seconds << " SECONDS ###############" << endl;
-            cout << " ############# SWEEP " << sweep_count << "##############" << endl;
+//             dump_lammps_traj_dimers(g, int(sweep_count));
+//         }
+//         if (sweep_count % freq_out == 0)
+//         {
+//             time(&timer2);
+//             seconds = difftime(timer2, timer1);
+//             cout << "###################################################################" << endl;
+//             cout << " ################  RUN TIME " << seconds << " SECONDS ###############" << endl;
+//             cout << " ############# SWEEP " << sweep_count << "##############" << endl;
 
-            double ee = g.compute_energy();
-            cout << "######### ENERGY " << ee << " ##############" << endl;
-            cout << "######### ENERGY PER DIMER " << 2 * ee / g.Nhe << " ##############" << endl;
-        }
-        if (sweep_count % freq_log == 0)
-        {
+//             double ee = g.compute_energy();
+//             cout << "######### ENERGY " << ee << " ##############" << endl;
+//             cout << "######### ENERGY PER DIMER " << 2 * ee / g.Nhe << " ##############" << endl;
+//         }
+//         if (sweep_count % freq_log == 0)
+//         {
 
-            time(&timer2);
-            seconds = difftime(timer2, timer1);
+//             time(&timer2);
+//             seconds = difftime(timer2, timer1);
 
-            dump_analysis(g, ofile, sweep_count, seed, seconds);
-        }
-        sweep_count++;
-    }
-}
+//             dump_analysis(g, ofile, sweep_count, seed, seconds);
+//         }
+//         sweep_count++;
+//     }
+// }
 
 void MC::sweep(System &g)
 {
     double ps_attempt = 0;
     int ss = 0;
+    int ssadd = 0;
 
     /**************************************************/
     /*** Attempt MC moves at prescribed frequencies ***/
     /**************************************************/
 
     /*** Vertex relaxation ***/
-    move_vertices(g, r);
+    move_vertices(g);
 
     /*** Conformational change ***/
     if (g.Nhe==6){
-        ind = gsl_rng_uniform_int(r, g.boundary.size());
+        int ind = gsl_rng_uniform_int(rg, g.boundary.size());
             //cout <<"ind id" << ind<<endl;
         int hh = g.boundary[ind];
-        int x = attempt_change_edge_type_tri(g, hh, r);
+        int x = attempt_change_edge_type_tri(g, hh);
         if (x >= 0)
             typechanged++; 
     }
     else{
         for (int nc = 0; nc < g.Nhe/2; nc++)
         {
-            int ind1 = gsl_rng_uniform_int(r, g.Nhe);
+            int ind1 = gsl_rng_uniform_int(rg, g.Nhe);
             int e1 = g.he[ind1].id;
             int x = -1;
-            x = attempt_change_edge_type(g, e1, r);
+            x = attempt_change_edge_type(g, e1);
             if (x >= 0)
                 typechanged++;
         }
@@ -281,13 +284,13 @@ void MC::sweep(System &g)
 
     /*** Add monomers/dimers ***/
     ps_attempt = ks0 * g.Nsurf;
-    if (gsl_rng_uniform(r) < ps_attempt)
+    if (gsl_rng_uniform(rg) < ps_attempt)
     {
-        ind = gsl_rng_uniform_int(r, g.boundary.size());
-        e = g.boundary[ind];
+        int ind = gsl_rng_uniform_int(rg, g.boundary.size());
+        int e = g.boundary[ind];
         if (g.check_inside_overlap(e) > 0)
         {
-            ssadd = attempt_add_monomer_dimer(g, e, r);
+            ssadd = attempt_add_monomer_dimer(g, e);
             if (ssadd > 1)
                 dimeradded++;
             else if (ssadd > 0)
@@ -302,15 +305,16 @@ void MC::sweep(System &g)
 
         /*** Remove monomers/dimers ***/
         ps_attempt = ks0 * g.Nsurf;
-        if (gsl_rng_uniform(r) < ps_attempt)
+        if (gsl_rng_uniform(rg) < ps_attempt)
         {
-            if (sweep > 0 && g.Nhe > 6)
+            //if (sweep > 0 && g.Nhe > 6)
+            if (g.Nhe > 6)
             {
-                ind = gsl_rng_uniform_int(r, g.boundary.size());
-                e = g.boundary[ind];
+                int ind = gsl_rng_uniform_int(rg, g.boundary.size());
+                int e = g.boundary[ind];
                 if (g.no_bond_boundary(e) > 0)
                 {
-                    ss = attempt_remove_monomer_dimer(g, e, r);
+                    ss = attempt_remove_monomer_dimer(g, e);
                     if (ss > 1)
                         dimerremoved++;
                     else if (ss > 0)
@@ -334,12 +338,12 @@ void MC::sweep(System &g)
             {
                 /*** Bind wedge ***/
                 //if (gsl_rng_uniform(r) < pb_attempt){
-                ind = gsl_rng_uniform_int(r, g.boundary.size());
+                int ind = gsl_rng_uniform_int(rg, g.boundary.size());
                 int hh = g.boundary[ind];
                 int tt = -1;
                 if (g.no_bond_boundary(hh) > 0)
                 {
-                    tt = attempt_bind_wedge_dimer(g, hh, r);
+                    tt = attempt_bind_wedge_dimer(g, hh);
                     if (tt > 0)
                         binding++;
                     tt = -1;
@@ -349,12 +353,12 @@ void MC::sweep(System &g)
                 /*** Unind wedge ***/
                 if (g.boundaryvbond.size() > 0) // &&  gsl_rng_uniform(r) < pb_attempt)
                 {
-                    ind = gsl_rng_uniform_int(r, g.boundary.size());
+                    ind = gsl_rng_uniform_int(rg, g.boundary.size());
                     int hh = g.boundary[ind];
                     if ((g.is_bond_in_boundary(hh) > 0) || (g.is_bond_out_boundary(hh) > 0))
                     {
                         //cout <<" trying unbind vv is " << vv <<endl;
-                        int tt = attempt_unbind_wedge_dimer(g, hh, r);
+                        int tt = attempt_unbind_wedge_dimer(g, hh);
                         if (tt > 0)
                             unbinding++;
                         tt = -1;
@@ -364,7 +368,7 @@ void MC::sweep(System &g)
 
                 if (g.Nhe > minhe_fission && g.Nsurf > 3){ // dont try if only last triangle is open
 
-                    int movetype = gsl_rng_uniform_int(r, 4);
+                    int movetype = gsl_rng_uniform_int(rg, 4);
                     switch (movetype)
                     {
             
@@ -376,7 +380,7 @@ void MC::sweep(System &g)
                         //double pf_attempt=kf0*g.Nsurf;
                         //if (gsl_rng_uniform(r) < pf_attempt)
                         //{
-                        int ff = attempt_wedge_fusion(g, r);
+                        int ff = attempt_wedge_fusion(g);
                         g.update_boundary();
                         if (ff > 0)
                             wedgefusion++;
@@ -391,7 +395,7 @@ void MC::sweep(System &g)
                             //pf_attempt=kf0; //g.Nsurf
                             //if (gsl_rng_uniform(r) < pf_attempt)
                             //{
-                            int ff = attempt_wedge_fission(g, r);
+                            int ff = attempt_wedge_fission(g);
                             g.update_boundary();
                             if (ff > 0)
                                 wedgefission++;
@@ -408,7 +412,7 @@ void MC::sweep(System &g)
                             //double pf_attempt=kf0;//g.Nsurf;
                             //if (gsl_rng_uniform(r) < pf_attempt)
                             //{
-                            int ff = attempt_fusion(g, r);
+                            int ff = attempt_fusion(g);
                             g.update_boundary();
                             if (ff > 0)
                                 fusion++;
@@ -423,7 +427,7 @@ void MC::sweep(System &g)
                         //pf_attempt=kf0*.25; //g.Nsurf
                         //if (gsl_rng_uniform(r) < pf_attempt)
                         //{
-                        int ff = attempt_fission(g, r);
+                        int ff = attempt_fission(g);
                         g.update_boundary();
                         if (ff > 0)
                             fission++;
@@ -446,16 +450,16 @@ void MC::sweep(System &g)
     double d_attempt = kd0 * g.Nhe;
 
     /*** Drug binding ***/
-    if (gsl_rng_uniform(r) < d_attempt)
+    if (gsl_rng_uniform(rg) < d_attempt)
     {
 
-        ind = gsl_rng_uniform_int(r, g.Nhe);
+        int ind = gsl_rng_uniform_int(rg, g.Nhe);
         //fprintf(stderr, "Attempt add drug, Nd=%d index=%d\n", g.Nd, ind );
-        e = g.he[ind].id;
+        int e = g.he[ind].id;
         if ((g.he[ind].type == 0 || g.he[ind].type == 3))
         { //no_bond_boundary(e)>0) {
             //fprintf(stderr, "Attempt delete monomer\n" );
-            ss = attempt_add_drug(g, e, r);
+            ss = attempt_add_drug(g, e);
             if (ss > 0)
             { //cout << "drug added " << endl;
                 drugadded++;
@@ -470,16 +474,16 @@ void MC::sweep(System &g)
     
 
     /*** Drug unbinding ***/
-    if (gsl_rng_uniform(r) < d_attempt && g.Nd > 0)
+    if (gsl_rng_uniform(rg) < d_attempt && g.Nd > 0)
     {
 
-        ind = gsl_rng_uniform_int(r, g.Nhe);
+        int ind = gsl_rng_uniform_int(rg, g.Nhe);
         //fprintf(stderr, "Attempt delete drug, Nd=%d index=%d\n", g.Nd, ind );
-        e = g.he[ind].id;
+        int e = g.he[ind].id;
         if (g.he[ind].type == 0 || g.he[ind].type == 3)
         { //no_bond_boundary(e)>0) {
             //fprintf(stderr, "Attempt delete monomer\n" );
-            ss = attempt_remove_drug(g, e, r);
+            ss = attempt_remove_drug(g, e);
             if (ss > 0)
             { //cout << "drug removed " << endl;
                 drugremoved++;
@@ -493,7 +497,7 @@ void MC::sweep(System &g)
                 
 }
 
-void move_vertices(System &g, gsl_rng *r)
+void MC::move_vertices(System &g)
 {
     /*** Attempt to move all vertices ***/
     //std::cout << "inin move_vertices"<<endl;
@@ -516,7 +520,7 @@ void move_vertices(System &g, gsl_rng *r)
 
         //}
         //g.update_normals();
-        int ind = gsl_rng_uniform_int(r, theSys.v.size());
+        int ind = gsl_rng_uniform_int(rg, g.v.size());
         /* test !!!! */
         //int ind = i;
         //std::cout << " move " << ind <<endl;
@@ -530,7 +534,7 @@ void move_vertices(System &g, gsl_rng *r)
         oldv[2] = g.v[ind].co[2];
 
         /* move the vertex to coordinates newv */
-        g.move_v_epsilon(g.xi, oldv, newv, r);
+        g.move_v_epsilon(g.xi, oldv, newv, rg);
 
         /* update the coordinates of the vertex  */
         g.v[ind].co[0] = newv[0];
@@ -596,7 +600,7 @@ void move_vertices(System &g, gsl_rng *r)
         double crit = exp((-de) / g.T);
 
         /* reject the move if crit is not met or overlap */
-        if (gsl_rng_uniform(r) > crit || overlapflag == 1)
+        if (gsl_rng_uniform(rg) > crit || overlapflag == 1)
         {
             /* update vertex coordinates to oldv */
             g.v[ind].co[0] = oldv[0];
@@ -634,7 +638,7 @@ void move_vertices(System &g, gsl_rng *r)
 }
 
 
-int move_one_vertex(System &g, int vid0, gsl_rng *r)
+int MC::move_one_vertex(System &g, int vid0)
 {
     //std::cout << "inin move_vertices"<<endl;
     double *newv = new double[3];
@@ -642,8 +646,6 @@ int move_one_vertex(System &g, int vid0, gsl_rng *r)
 
     int overlapflag = -1;
     double e1 = 0, e2 = 0, de = 0;
-
-
     
     overlapflag = -1;
 
@@ -661,7 +663,7 @@ int move_one_vertex(System &g, int vid0, gsl_rng *r)
     oldv[2] = g.v[ind].co[2];
 
     /* move the vertex to coordinates newv */
-    g.move_v_epsilon(g.xi, oldv, newv, r);
+    g.move_v_epsilon(g.xi, oldv, newv, rg);
 
     /* update the coordinates of the vertex  */
     g.v[ind].co[0] = newv[0];
@@ -691,7 +693,7 @@ int move_one_vertex(System &g, int vid0, gsl_rng *r)
     double crit = exp((-de) / g.T);
 
         /* reject the move if crit is not met or overlap */
-    if (gsl_rng_uniform(r) <crit && overlapflag != 1)
+    if (gsl_rng_uniform(rg) <crit && overlapflag != 1)
     {
         //############ move dist
         //ofstream myfile;
@@ -721,7 +723,7 @@ int move_one_vertex(System &g, int vid0, gsl_rng *r)
 }
 
 
-int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should update with pre_oipen wedge
+int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with pre_oipen wedge
 {
     //std::cout << "in attempt_add_monomer-dimer" <<endl;
     g.update_normals();
@@ -825,7 +827,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
             }*/
-	    etypenew=gsl_rng_uniform_int(r, 4);
+	    etypenew=gsl_rng_uniform_int(rg, 4);
             double e1 = g.bend_energy(heindex0) + g.bend_energy(xidindex);
             // TYPES BASED ON Concentration
             /*if (gsl_rng_uniform(r) < g.cdProb) {
@@ -923,7 +925,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
                         overlapflag = 1;
                 }
 
-                if (gsl_rng_uniform(r) < crit && overlapflag == -1)
+                if (gsl_rng_uniform(rg) < crit && overlapflag == -1)
                 {
                     //ToDo
                     // update next_prevoius surface
@@ -1062,7 +1064,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
             }*/
-	    etypenew=gsl_rng_uniform_int(r, 4);
+	    etypenew=gsl_rng_uniform_int(rg, 4);
             /* if (gsl_rng_uniform(r) < g.cdProb) {
                     if (gsl_rng_uniform(r) < 0.5) {etypenew=0;}
                     else {etypenew=3; }
@@ -1153,7 +1155,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
                         overlapflag = 1;
                 }
 
-                if (gsl_rng_uniform(r) < crit && overlapflag == -1)
+                if (gsl_rng_uniform(rg) < crit && overlapflag == -1)
                 {
                     // ToDo
                     // update next_previous boundary
@@ -1246,7 +1248,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
         //get_dimer_etypes(*etypeheid0,*etypenew1,etypenew2,r);
         if (etypeheid0 == 0)
         {
-            if (gsl_rng_uniform(r) < .5)
+            if (gsl_rng_uniform(rg) < .5)
             {
                 etypenew1 = 1;
                 etypenew2 = 2;
@@ -1260,7 +1262,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
 
         else if (etypeheid0 == 3)
         {
-            if (gsl_rng_uniform(r) < .5)
+            if (gsl_rng_uniform(rg) < .5)
             {
                 etypenew1 = 3;
                 etypenew2 = 3;
@@ -1274,7 +1276,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
 
         else if (etypeheid0 == 1)
         {
-            if (gsl_rng_uniform(r) < .5)
+            if (gsl_rng_uniform(rg) < .5)
             {
                 etypenew1 = 2;
                 etypenew2 = 0;
@@ -1288,7 +1290,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
 
         else if (etypeheid0 == 2)
         {
-            if (gsl_rng_uniform(r) < .5)
+            if (gsl_rng_uniform(rg) < .5)
             {
                 etypenew1 = 0;
                 etypenew2 = 1;
@@ -1346,7 +1348,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
         //std::cout << "gbb is  " << gbb <<endl;
         double *dis_vector;
         dis_vector= new double[3];
-        double dis_new = g.add_dimer(heid0, r, etypenew1, etypenew2,dis_vector);
+        double dis_new = g.add_dimer(heid0, rg, etypenew1, etypenew2,dis_vector);
 
 
         if (dis_new < 0)
@@ -1428,7 +1430,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
             overlapflag = 1;
         }
 
-        if (gsl_rng_uniform(r) < crit && overlapflag == -1) //dimer added
+        if (gsl_rng_uniform(rg) < crit && overlapflag == -1) //dimer added
         {
             // ToDo
             // update boundary index
@@ -1513,7 +1515,7 @@ int attempt_add_monomer_dimer(System &g, int heid0, gsl_rng *r) //!!! Should upd
     return -1;
 }
 
-int attempt_remove_monomer_dimer(System &g, int heid0, gsl_rng *r) /* 102220 THIS NEEDS UPDATE -> MOVE GEOMETRY TO geometry! */
+int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS UPDATE -> MOVE GEOMETRY TO geometry! */
 {
     //std::cout << "in attempt_remove_monomer_dimer" << endl;
     //std::cout << "Nd is " <<g.Nd <<endl;
@@ -1600,7 +1602,7 @@ int attempt_remove_monomer_dimer(System &g, int heid0, gsl_rng *r) /* 102220 THI
             std::cout << "crit is " << crit << endl;
             crit = 1;
         }
-        if (gsl_rng_uniform(r) < crit)
+        if (gsl_rng_uniform(rg) < crit)
         {
             //g.Nd-=g.he[heopindex0].din;
             //g.Nd-=g.he[heindex0].din;
@@ -1738,7 +1740,7 @@ int attempt_remove_monomer_dimer(System &g, int heid0, gsl_rng *r) /* 102220 THI
             double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
             double crit = exp(-de / g.T) / (2 * vp); 
             //std::cout << " crit is " << crit << endl;
-            if (gsl_rng_uniform(r) < crit) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)
+            if (gsl_rng_uniform(rg) < crit) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)
             {
                 int nextidboundary0 = g.he[g.heidtoindex[heid0]].nextid_boundary;
                 int previdboundary0 = g.he[g.heidtoindex[heid_prev_boundary]].previd_boundary;
@@ -1859,7 +1861,7 @@ int attempt_remove_monomer_dimer(System &g, int heid0, gsl_rng *r) /* 102220 THI
             double crit = exp(-de / g.T) / (2 * vp);
             //delete[] dis_vector;
             //std::cout << " crit is " << crit << endl;
-            if (gsl_rng_uniform(r) < crit)
+            if (gsl_rng_uniform(rg) < crit)
             {
                 //std::cout << " 008 g.Nd is " <<g.Nd<<endl;
                 int nextidboundary0 = g.he[g.heidtoindex[heid_next_boundary]].nextid_boundary;
@@ -1936,7 +1938,7 @@ int attempt_remove_monomer_dimer(System &g, int heid0, gsl_rng *r) /* 102220 THI
     return -1;
 }
 
-int attempt_wedge_fusion(System &g, gsl_rng *r)
+int MC::attempt_wedge_fusion(System &g)
 {
     //ToDo : update it to read pairs from a vector of pairs
     //std::cout << "in attempt wedge Fusion  " << endl;
@@ -1980,7 +1982,7 @@ int attempt_wedge_fusion(System &g, gsl_rng *r)
             //std::exit(-1);
         }*/
 
-    int ind = gsl_rng_uniform_int(r, g.fusionwedgehe.size());
+    int ind = gsl_rng_uniform_int(rg, g.fusionwedgehe.size());
 
     int heid0 = g.fusionwedgehe[ind];
     //std::cout << "00 heid for fusion is " << heid0 <<endl;
@@ -1997,7 +1999,7 @@ int attempt_wedge_fusion(System &g, gsl_rng *r)
     }
     else if ((g.he[heindex0].prev_wedge_fusion_heid != -1) && (g.he[heindex0].next_wedge_fusion_heid != -1))
     { // if has both choose randomly
-        if (gsl_rng_uniform(r) < .5)
+        if (gsl_rng_uniform(rg) < .5)
         { // with prev
             heindex_next = heindex0;
             heindex_prev = g.heidtoindex[g.he[heindex_next].prev_wedge_fusion_heid];
@@ -2230,7 +2232,7 @@ int attempt_wedge_fusion(System &g, gsl_rng *r)
             }
         }
     }
-    if (gsl_rng_uniform(r) < crit && overlapflag == -1)
+    if (gsl_rng_uniform(rg) < crit && overlapflag == -1)
     {
         std::cout << "wedge fusion  crit is met" << endl;
 
@@ -2369,7 +2371,7 @@ int attempt_wedge_fusion(System &g, gsl_rng *r)
     return -1;
 }
 
-int attempt_wedge_fission(System &g, gsl_rng *r)
+int MC::attempt_wedge_fission(System &g)
 {
     //std::cout << "in attempt wedge fission  " << endl;
     int vid0 = -1;
@@ -2382,7 +2384,7 @@ int attempt_wedge_fission(System &g, gsl_rng *r)
 
     //std::cout << "000000000000000000000000000000000000"<<endl;
     //std::cout << "00 in wedge fission g.boundary.size()" << g.boundary.size() <<endl;
-    int ind = gsl_rng_uniform_int(r, g.boundary.size());
+    int ind = gsl_rng_uniform_int(rg, g.boundary.size());
 
     int heid0 = g.boundary[ind];
     int heindex0 = g.heidtoindex[heid0];
@@ -2391,7 +2393,7 @@ int attempt_wedge_fission(System &g, gsl_rng *r)
 
     //std::cout << "00 Starting wedge Fission  heid0 " << heid0 <<" boundary index is " << g.he[heindex0].boundary_index << endl;
 
-    if (gsl_rng_uniform(r) < .5)
+    if (gsl_rng_uniform(rg) < .5)
     {
         vid0 = g.he[heindex0].vin;
         //std::cout << " wedge Fission  vin " << vid0 << endl;
@@ -2437,7 +2439,7 @@ int attempt_wedge_fission(System &g, gsl_rng *r)
     }
 
     // choose where to break ->xid
-    int indhe = gsl_rng_uniform_int(r, g.v[vindex0].hein.size());
+    int indhe = gsl_rng_uniform_int(rg, g.v[vindex0].hein.size());
 
     int xid = g.v[vindex0].hein[indhe];
 
@@ -2491,7 +2493,7 @@ int attempt_wedge_fission(System &g, gsl_rng *r)
     e1 += g.find_dg(g.he[g.heidtoindex[xid]].type, g.he[g.heidtoindex[xidnextid]].type, g.he[g.heidtoindex[xidnextid]].din);
     //int breakprevxid=-1;
     //int breaknextprev=-1;
-    if (gsl_rng_uniform(r) < .5)
+    if (gsl_rng_uniform(rg) < .5)
     { //BREAK prev- this
         // breakprevxid=g.he[g.heidtoindex[xidprevid]].vout;
         e1 += g.find_dg(g.he[g.heidtoindex[xidprevid]].type, g.he[g.heidtoindex[xid]].type, g.he[g.heidtoindex[xid]].din);
@@ -2522,7 +2524,7 @@ int attempt_wedge_fission(System &g, gsl_rng *r)
     double *newv2 = new double[3];
     double *tempv = new double[3]; // this is vector from this to new_moved
 
-    g.move_p(g.v[vindex0].co, newv1, r); // move one in one direction //
+    g.move_p(g.v[vindex0].co, newv1, rg); // move one in one direction //
 
     //std::cout << "veclen(g.v[vindex0].co, tempv) " << veclen(g.v[vindex0].co, newv1) <<endl<<endl;
 
@@ -2677,7 +2679,7 @@ int attempt_wedge_fission(System &g, gsl_rng *r)
         }
     }
 
-    if (gsl_rng_uniform(r) < crit && overlapflag == -1)
+    if (gsl_rng_uniform(rg) < crit && overlapflag == -1)
     {
         std::cout << "wedge fission accepted added vid " << newvid1 << " " << newvid2 << endl;
         //std::cout << "#############" << endl;
@@ -2805,7 +2807,7 @@ int attempt_wedge_fission(System &g, gsl_rng *r)
 }
 
 
-int attempt_change_edge_type_tri(System &g, int heid0, gsl_rng *r)
+int MC::attempt_change_edge_type_tri(System &g, int heid0)
 {
     //std::cout << "inin attempt change type"<<endl;
     if (g.Nhe!=6) {
@@ -2838,7 +2840,7 @@ int attempt_change_edge_type_tri(System &g, int heid0, gsl_rng *r)
     int prev_newtype=-1;
 
     //type selection:
-    int newtypeselector = gsl_rng_uniform_int(r, 6);
+    int newtypeselector = gsl_rng_uniform_int(rg, 6);
 
     switch (newtypeselector)
     {
@@ -2936,7 +2938,7 @@ int attempt_change_edge_type_tri(System &g, int heid0, gsl_rng *r)
 
     double de = e2 - (g.mu[newtype] + g.mu[next_newtype] +g.mu[prev_newtype])  - (e1 - g.mu[heidtype] +g.mu[nexttype] + g.mu[prevtype]) ;
     double crit = exp(-de / g.T);
-    if (gsl_rng_uniform(r) < crit)
+    if (gsl_rng_uniform(rg) < crit)
     {
         //std::cout <<" change accepted";
         //update_opposite
@@ -2985,12 +2987,12 @@ int attempt_change_edge_type_tri(System &g, int heid0, gsl_rng *r)
 
 
 
-int attempt_change_edge_type(System &g, int heid0, gsl_rng *r)
+int MC::attempt_change_edge_type(System &g, int heid0)
 {
     //std::cout << "inin attempt change type"<<endl;
     int newtype = -1;
     int newoptype = -1;
-    newtype = gsl_rng_uniform_int(r, 4);
+    newtype = gsl_rng_uniform_int(rg, 4);
 
     int heindex0 = g.heidtoindex[heid0];
     int oldtype = g.he[heindex0].type;
@@ -3153,7 +3155,7 @@ int attempt_change_edge_type(System &g, int heid0, gsl_rng *r)
 
     double de = e2 - g.mu[newtype] - (e1 - g.mu[oldtype]);
     double crit = exp(-de / g.T);
-    if (gsl_rng_uniform(r) < crit)
+    if (gsl_rng_uniform(rg) < crit)
     {
         //std::cout <<" change accepted";
         return newtype;
@@ -3173,7 +3175,7 @@ int attempt_change_edge_type(System &g, int heid0, gsl_rng *r)
 /* two halfedges will bind and a doubleboundary vertex will be created. */
 /* boundary edges should be updated */
 /*************************************/
-int attempt_fusion(System &g, gsl_rng *r)
+int MC::attempt_fusion(System &g)
 {
 
     //std::cout << "in attempt_fusion " << endl;
@@ -3209,7 +3211,7 @@ int attempt_fusion(System &g, gsl_rng *r)
             //std::exit(-1);
         }*/
 
-    int ind = gsl_rng_uniform_int(r, g.fusionhe.size());
+    int ind = gsl_rng_uniform_int(rg, g.fusionhe.size());
     int heid0 = g.fusionhe[ind];
     //std::cout << "heid for fusion " << heid0 <<endl;
     //if (g.Test_assembly==1) { heid0=}
@@ -3230,7 +3232,7 @@ int attempt_fusion(System &g, gsl_rng *r)
     }
     else if ((g.he[heindex0].prev_fusion_heid != -1) && (g.he[heindex0].next_fusion_heid != -1))
     { // if has both choose randomly
-        if (gsl_rng_uniform(r) < .5)
+        if (gsl_rng_uniform(rg) < .5)
         { // with prev
             heindex_next = heindex0;
             heindex_prev = g.heidtoindex[g.he[heindex_next].prev_fusion_heid];
@@ -3481,7 +3483,7 @@ int attempt_fusion(System &g, gsl_rng *r)
             }
         }
     }
-    if (gsl_rng_uniform(r) < crit && overlapflag == -1)
+    if (gsl_rng_uniform(rg) < crit && overlapflag == -1)
     {
 
         //std::cout << "00 in fusion fusion crit is met"<<endl;
@@ -3643,13 +3645,13 @@ int attempt_fusion(System &g, gsl_rng *r)
 /*****************Fission *********************/
 /* Nboundary should be>1 for this to happen */
 
-int attempt_fission(System &g, gsl_rng *r)
+int MC::attempt_fission(System &g)
 {
     //std::cout << "in attempt Fission  " << endl;
     if (g.Nboundary < 2)
         return -1;
 
-    int ind = gsl_rng_uniform_int(r, g.boundary.size()); //choose a boundary halfedge
+    int ind = gsl_rng_uniform_int(rg, g.boundary.size()); //choose a boundary halfedge
     int heid0 = g.boundary[ind];
     int heindex0 = g.heidtoindex[heid0];
     int vid0 = -1;
@@ -3751,7 +3753,7 @@ int attempt_fission(System &g, gsl_rng *r)
     double *newv1 = new double[3];
     double *newv2 = new double[3];
     double *tempv = new double[3];
-    g.move_p( g.v[vindex0].co, tempv, r); // move one in one direction //
+    g.move_p( g.v[vindex0].co, tempv, rg); // move one in one direction //
     multvec(tempv, .5, newv1);
 
     // move the other one in opposit direction
@@ -3915,7 +3917,7 @@ int attempt_fission(System &g, gsl_rng *r)
         }
     }
 
-    if ((gsl_rng_uniform(r) < crit && overlapflag == -1) || g.Test_assembly == 1)
+    if ((gsl_rng_uniform(rg) < crit && overlapflag == -1) || g.Test_assembly == 1)
     {
         //std::cout << "fission accepted added vid " << newvid_prev << " " << newvid_next << endl;
         std::cout << "fission accepted opeened heid_prev" << heid_prev << " and heid_next" << heid_next << endl;
@@ -4054,7 +4056,7 @@ int attempt_fission(System &g, gsl_rng *r)
 /************************** unbind wedge **************************/
 /******************************************************************/
 
-int attempt_unbind_wedge_dimer(System &g, int heid0, gsl_rng *r)
+int MC::attempt_unbind_wedge_dimer(System &g, int heid0)
 {
     ////std::cout << "in attempt unbind_wedge "<< endl;
 
@@ -4127,7 +4129,7 @@ int attempt_unbind_wedge_dimer(System &g, int heid0, gsl_rng *r)
         std::cout << " unbind wedge de is " << de << " crit is " << crit << endl;
         crit = 1;
     }
-    if (gsl_rng_uniform(r) < crit)
+    if (gsl_rng_uniform(rg) < crit)
     {
         g.he[previndex].nextid = -1;
         g.he[nextindex].previd = -1;
@@ -4144,7 +4146,7 @@ int attempt_bind_wedge_dimer(System &g, int heid0, gsl_rng *r)
 {
 }*/
 
-int attempt_bind_wedge_dimer(System &g, int heid0, gsl_rng *r)
+int MC::attempt_bind_wedge_dimer(System &g, int heid0)
 {
     ////std::cout << "in attempt_bind_wedge_dimer heid0 " << heid0 << endl;
     int heindex0 = g.heidtoindex[heid0]; // this edge on boundary
@@ -4184,7 +4186,7 @@ int attempt_bind_wedge_dimer(System &g, int heid0, gsl_rng *r)
 
     if ((heidnext != -1) && (heidprev != -1))
     {
-        if (gsl_rng_uniform(r) < .5)
+        if (gsl_rng_uniform(rg) < .5)
         {
             heindexnext = g.heidtoindex[heidnext];
             heindexprev = heindex0;
@@ -4257,7 +4259,7 @@ int attempt_bind_wedge_dimer(System &g, int heid0, gsl_rng *r)
     {
         crit = 1;
     }
-    if (gsl_rng_uniform(r) < crit)
+    if (gsl_rng_uniform(rg) < crit)
     {
         //std::cout << "bound! heidpre to heid next"  << heidprev  << heidnext << endl;
         return (1);
@@ -4272,7 +4274,7 @@ int attempt_bind_wedge_dimer(System &g, int heid0, gsl_rng *r)
     return (-1);
 }
 
-int attempt_bind_triangle(System &g, int heid0, gsl_rng *r) //
+int MC::attempt_bind_triangle(System &g, int heid0) //
 {
     //std::cout << "in attempt_bind_triangle heid0 " << heid0 << endl;
 
@@ -4333,7 +4335,7 @@ int attempt_bind_triangle(System &g, int heid0, gsl_rng *r) //
     {
         crit = 1;
     }
-    if (gsl_rng_uniform(r) < crit || g.Test_assembly == 1)
+    if (gsl_rng_uniform(rg) < crit || g.Test_assembly == 1)
     {
         g.Nboundary--;
         std::cout << "bound! triangle " << heid0 << endl;
@@ -4359,7 +4361,7 @@ int attempt_bind_triangle(System &g, int heid0, gsl_rng *r) //
     return (-1);
 }
 
-int attempt_unbind_triangle(System &g, int heid0, gsl_rng *r)
+int MC::attempt_unbind_triangle(System &g, int heid0)
 {
 
     //std::cout << "in attempt_unbind_triangle heid0 " << heid0 << endl;
@@ -4384,7 +4386,7 @@ int attempt_unbind_triangle(System &g, int heid0, gsl_rng *r)
     de -= g.find_dg(g.he[heindex0].type, g.he[nextindex0].type, g.he[nextindex0].din);
 
     double crit = exp((-de) / g.T) / 2;
-    if (gsl_rng_uniform(r) < crit || g.Test_assembly == 1)
+    if (gsl_rng_uniform(rg) < crit || g.Test_assembly == 1)
     {
         int bi = g.Nboundarylast;
         g.he[heindex0].boundary_index = bi;
@@ -4413,7 +4415,7 @@ int attempt_unbind_triangle(System &g, int heid0, gsl_rng *r)
     return (-1);
 }
 
-int attempt_add_drug(System &g, int heid0, gsl_rng *r)
+int MC::attempt_add_drug(System &g, int heid0)
 {
 
     //std::cout << "in attempt adding drug " << heid0 <<endl;
@@ -4462,7 +4464,7 @@ int attempt_add_drug(System &g, int heid0, gsl_rng *r)
     //  e2 += (g.gdrug-g.mudrug);
     //}
     double crit = exp((-(e2 - e1)) / g.T);
-    if (gsl_rng_uniform(r) < crit)
+    if (gsl_rng_uniform(rg) < crit)
     {
         //std::cout << "drug added on edge " << heindex0 <<endl;
         //std::cout << "prev is " << g.he[heindex0].previd <<endl;
@@ -4482,7 +4484,7 @@ int attempt_add_drug(System &g, int heid0, gsl_rng *r)
         return -1;
     }
 }
-int attempt_remove_drug(System &g, int heid0, gsl_rng *r)
+int MC::attempt_remove_drug(System &g, int heid0)
 {
     //std::cout << "in attempt remove drug " << heid0 <<endl;
     //std::cout << " g.Nd is " <<g.Nd<<endl;
@@ -4535,7 +4537,7 @@ int attempt_remove_drug(System &g, int heid0, gsl_rng *r)
     double crit = exp((-(e2 - e1)) / g.T);
     //std::cout << " de removal drug is " <<e2-e1<<endl;
     //std::cout << " 011 g.Nd is " <<g.Nd<<endl;
-    if (gsl_rng_uniform(r) < crit)
+    if (gsl_rng_uniform(rg) < crit)
     {
         //std::cout << "drug removed from edge " << heindex0 <<endl;
         // std::cout<<"edgetype is " << hetype <<endl;
@@ -4556,12 +4558,12 @@ int attempt_remove_drug(System &g, int heid0, gsl_rng *r)
         return 0;
     }
 }
-void get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2, gsl_rng *r)
+void MC::get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2)
 {
 
     if (etypeheid0 == 0)
     {
-        if (gsl_rng_uniform(r) < .5)
+        if (gsl_rng_uniform(rg) < .5)
         {
             etypenew1 = 1;
             etypenew2 = 2;
@@ -4575,7 +4577,7 @@ void get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2, gsl_rng *r)
 
     else if (etypeheid0 == 3)
     {
-        if (gsl_rng_uniform(r) < .5)
+        if (gsl_rng_uniform(rg) < .5)
         {
             etypenew1 = 3;
             etypenew2 = 3;
@@ -4589,7 +4591,7 @@ void get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2, gsl_rng *r)
 
     else if (etypeheid0 == 1)
     {
-        if (gsl_rng_uniform(r) < .5)
+        if (gsl_rng_uniform(rg) < .5)
         {
             etypenew1 = 2;
             etypenew2 = 0;
@@ -4603,7 +4605,7 @@ void get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2, gsl_rng *r)
 
     else if (etypeheid0 == 2)
     {
-        if (gsl_rng_uniform(r) < .5)
+        if (gsl_rng_uniform(rg) < .5)
         {
             etypenew1 = 0;
             etypenew2 = 1;
@@ -4640,179 +4642,7 @@ void get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2, gsl_rng *r)
     //etypenew2=gsl_rng_uniform_int(r,4);
 }
 
-void make_seed(System &g, gsl_rng *r)
-{
-    /*//if ((file = fopen(filename, "r")))
-    //int frame = 0;
-    //int monomeradded=0;
-    ///int dimeradded=0;
-    //int monomerremoved=0;
-    //int dimerremoved=0;
-
-    make_initial_pentamer(g);
-    double ee = g.compute_energy();
-
-    //dump_lammps_data_file(g, frame++);
-    for (int rstep = 0; rstep < 1000; rstep++)
-    { //relaxing the shell
-        move_vertices(g, r);
-        g.update_boundary();
-    }
-    ee = g.compute_energy();
-    std::cout << ee << endl;
-    //dump_lammps_data_file(g, frame++);
-    //fprintf(stderr, "Graph initialized.\n");
-
-    for (int rstep = 0; rstep < 5; rstep++)
-    {
-
-        g.add_dimer(3 + rstep * 4, r, 3, 3);
-        g.update_boundary();
-
-        for (int rstep = 0; rstep < 10000; rstep++)
-        { //relaxing the shell
-            move_vertices(g, r);
-        }
-        g.update_boundary();
-    }
-    //fprintf(stderr, "Dimers added \n");
-    //std::cout << "#########  NHE " << g.Nhe << " #######################" << endl;
-    //fprintf(stderr, "Adding more!  \n");
-    std::cout << endl;
-    for (int rstep = 0; rstep < 5; rstep++)
-    {
-
-        g.add_dimer(21 + rstep * 4, r, 1, 2);
-        g.update_boundary();
-        //g.update_index();
-        ee = g.compute_energy();
-
-        for (int step = 0; step < 10000; step++)
-        { //relaxing the shell
-            move_vertices(g, r);
-            g.update_boundary();
-        }
-        ee = g.compute_energy();
-
-        //dump_lammps_data_file(g, frame++);
-    }
-
-    //fprintf(stderr, "More Dimers added \n");
-    //std::cout << "TESTING BIND UNBIND in make seed " << endl;
-    std::cout << endl;
-
-    //for (unsigned int step = 0; step < g.boundary.size() *10; step++)
-    //{
-    //    int ind = gsl_rng_uniform_int(r, g.boundary.size());
-
-    //    int e = g.boundary[ind];
-    for (int rstep = 0; rstep < 100000; rstep++)
-    { //relaxing the shell
-        move_vertices(g, r);
-    }
-    g.update_boundary();
-
-    for (int rstep = 0; rstep < 20; rstep++)
-    {
-        int e = 23 + rstep * 4;
-        //std::cout << "e for binding " << e << endl;
-        if (g.no_bond_boundary(e) > 0)
-        {
-            int tt = attempt_bind_wedge_dimer(g, e, r);
-            if (tt > 0)
-            {
-                std::cout << "Bound " << endl;
-                tt = 0;
-            }
-            //std::cout << "relaxing the shell"<<endl;
-            //g.update_boundary();
-            //dump_lammps_data_file(g, frame++);
-            for (int rstep = 0; rstep < 1000; rstep++)
-            { //relaxing the shell
-                move_vertices(g, r);
-            }
-            g.update_boundary();
-        }
-        //ind = gsl_rng_uniform_int(r, g.boundary.size());
-        //std::cout <<"ind id for unbinding" << ind<<endl;
-        //e = g.boundary[ind];
-        //std::cout << "e for unbinding " << e << endl;
-        //if ((g.is_bond_in_boundary(e)>0) || (g.is_bond_out_boundary(e)>0)) {
-        //int tt = attempt_unbind_wedge_dimer(g, e, r);
-        //  if (tt > 0)
-        // {
-        //     std::cout << "UNNNNBound " << endl;
-        //     tt = 0;
-        // }
-        // g.update_boundary();
-        //dump_lammps_data_file(g, frame++);
-        //}
-    }
-    g.update_boundary();
-    //dump_lammps_data_file(g, frame++);
-    //std::cout << "AFTER ALL BINDINGS" << endl;
-    //std::cout << "#########  NHE " << g.Nhe << " #######################" << endl;
-    std::cout << endl;
-    //fprintf(stderr, "Adding monomer???  \n");
-    //for (vector<int>::iterator vt = g.boundary.begin(); vt != g.boundary.end(); ++vt)
-    //{
-    //    std::cout << "heid "<< *vt << "next " << g.he[g.heidtoindex[*vt]].nextid << "prev " << g.he[g.heidtoindex[*vt]].previd << endl;
-    //}
-    int nm = 0;
-    for (int rstep = 0; rstep < 5; rstep++)
-    {
-        int heid0 = 23 + rstep * 4;
-        int heindex0 = g.heidtoindex[heid0];
-        int xid = g.he[heindex0].nextid;
-        int yid = g.he[heindex0].previd;
-        if (xid != -1)
-        {
-            int ss = g.add_monomer(heid0, xid, 1);
-            if (ss > 0)
-            {
-                //std::cout << "monomer added"<< endl;
-                ss = 0;
-            }
-            //dump_lammps_data_file(g, frame++);
-            nm++;
-        }
-        else if (yid != -1)
-        {
-            int ss = g.add_monomer(yid, heid0, 1);
-            if (ss > 0)
-            {
-                //std::cout << "monomer added"<< endl;
-                ss = 0;
-            }
-            //dump_lammps_data_file(g, frame++);
-            nm++;
-        }
-        //g.add_monomer_dimer(23 + rstep * 4); //change it
-        g.update_boundary();
-
-        for (int rstep = 0; rstep < 1000; rstep++)
-        { //relaxing the shell
-            move_vertices(g, r);
-            g.update_boundary();
-        }
-
-        //dump_lammps_data_file(g, frame++);
-    }
-    //dump_lammps_data_file(g, frame++);
-    //std::cout << nm << " monomers added" << endl;
-    if (nm < 5)
-    {
-        std::exit(-1);
-    }
-    //std::cout << "#########  NHE " << g.Nhe << " #######################" << endl;
-    std::cout << endl;*/
-}
-
-void make_seed_T3(System &g, gsl_rng *r)
-{
-}
-
-int force_add_monomer_with_next(System &g, int heid0, int xid, gsl_rng *r)
+int MC::force_add_monomer_with_next(System &g, int heid0, int xid)
 {
 
     //std::cout << "in force_add_monomer_with_next" <<endl;
@@ -4913,7 +4743,7 @@ int force_add_monomer_with_next(System &g, int heid0, int xid, gsl_rng *r)
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
             }*/
-		etypenew=gsl_rng_uniform_int(r, 4);
+		etypenew=gsl_rng_uniform_int(rg, 4);
             // TYPES BASED ON Concentration
             /*if (gsl_rng_uniform(r) < g.cdProb) {
                     if (gsl_rng_uniform(r) < 0.5) {etypenew=0;}
@@ -5000,7 +4830,7 @@ int force_add_monomer_with_next(System &g, int heid0, int xid, gsl_rng *r)
                         overlapflag = 1;
                 }
 
-                if (gsl_rng_uniform(r) < crit && overlapflag == -1)
+                if (gsl_rng_uniform(rg) < crit && overlapflag == -1)
                 {
                     //ToDo
                     // update next_prevoius surface

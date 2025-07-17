@@ -46,7 +46,7 @@ void ParamDict::read_params(std::string filename)
         while(std::getline(file,line))
         {
             line.erase(std::remove_if(line.begin(), line.end(), isspace), line.end()); //remove whitespace
-            int index = line.find("=");
+            int index = line.find(":");
             if (index==-1) continue;
 
             std::string key = line.substr(0,index);

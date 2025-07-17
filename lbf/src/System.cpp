@@ -6,16 +6,8 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
     //Set RNG
     rg = the_rg;
 
-    //First assign default values to parameters
+    /*** First assign default values to parameters ***/
     obs = nullptr;
-
-    //Then assign from ParamDict if there
-    do_paramdict_assign(theParams);
-
-    //Initialize Particles
-    //do_particle_init();
-
-    // TODO Auto-generated constructor stub
 	Test_assembly = 0;
 	Nvlast = 0;
 	Nhelast = 0;
@@ -30,6 +22,69 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	l0 = nullptr;
 	theta0 = nullptr;
 	phi0 = nullptr;
+	dmu = 0;
+	ks0 = 0;
+	kd0 = 0;
+	dg01 = 0;
+	dg20 = 0;
+	dg33 = 0;
+	dg00 = 0;
+	dgother = 0;
+
+	//Initialize other defaults
+	initialize(4); //4 is the default number of types
+
+	//Set equilibrium bond lengths
+    l0[0] = 1.05;
+    l0[1] = .95;
+    l0[2] = .95;
+    l0[3] = 1.05;
+
+    //Set equilibrium bond angles (note: in the paper, this is theta0!)
+    phi0[0] = 1.05;
+    phi0[1] = 1.17;
+    phi0[2] = .98;
+    phi0[3] = 1.05;
+
+    xi = .5;
+    T = 1; //temperature
+    Nd = 0;
+
+    //Then assign from ParamDict if there
+    do_paramdict_assign(theParams);
+
+
+	/*** Assign "computed" parameters ***/
+	epsilon[1] = epsilon[0];
+	epsilon[2] = epsilon[0];
+	epsilon[3] = epsilon[0];
+	kappa[1] = kappa[0];
+	kappa[2] = kappa[0];
+	kappa[3] = kappa[0];
+	kappaPhi[1] = kappaPhi[0];
+	kappaPhi[2] = kappaPhi[0];
+	kappaPhi[3] = kappaPhi[0];
+	theta0[2] = theta0[0];
+	theta0[3] = theta0[0];
+	mu[1] = mu[0] + dmu;
+	mu[2] = mu[1];
+
+	// gaussian
+    double alp=1;
+    
+    l_thermal_kappa = sqrt((3.0*l0[0]*l0[0]*alp*T/(2.0*kappa[0])));
+    theta_thermal_kappa = sqrt(2.0*(alp*T/(kappa[0])));
+    l_thermal_sigma = sqrt(2.0*(alp*T/epsilon[0]));
+    //g.l_thermal_sigma = g.l_thermal_kappa;//sqrt(2.0*(alp*g.T/g.epsilon[0]));
+    gaussian_sigma = 0.5 * l_thermal_kappa; 
+
+    cout << "l_thermal_sigma is " << l_thermal_sigma<<endl;
+    cout << "l_thermal_kappa is " << l_thermal_kappa<<endl;
+    cout << "theta_thermal_kappa is " << theta_thermal_kappa<<endl;
+    cout << "gaussian sigma " << gaussian_sigma <<endl;
+
+    //Initialize Particles
+    //do_particle_init();
 
 }
 
@@ -73,28 +128,40 @@ System::~System() {
 
 void System::do_paramdict_assign(ParamDict &theParams) {
 
-    // if(theParams.is_key("kT")) kT = std::stod(theParams.get_value("kT"));
-    // if(theParams.is_key("rho")) rho = std::stod(theParams.get_value("rho"));
-    // if(theParams.is_key("a")) a = std::stod(theParams.get_value("a"));
-    // if(theParams.is_key("phi")) phi = std::stod(theParams.get_value("phi"));
-    // if(theParams.is_key("dt")) dt = std::stod(theParams.get_value("dt"));
-    // if(theParams.is_key("particle_protocol")) particle_protocol = theParams.get_value("particle_protocol");
-    // //if(theParams.is_key("is_single_particle")) is_single_particle = std::stoi(theParams.get_value("is_single_particle"));
-    // if(theParams.is_key("nonbonded_potential_type")) nonbonded_potential_type = theParams.get_value("nonbonded_potential_type");
-    // if(theParams.is_key("bonded_potential_type")) bonded_potential_type = theParams.get_value("bonded_potential_type");
-    // if(theParams.is_key("external_potential_type")) external_potential_type = theParams.get_value("external_potential_type");
-    // if(theParams.is_key("epsilon")) epsilon = std::stod(theParams.get_value("epsilon"));
-    // if(theParams.is_key("sigma")) sigma = std::stod(theParams.get_value("sigma"));
-    // if(theParams.is_key("ubarrier")) ubarrier = std::stod(theParams.get_value("ubarrier"));
-    // if(theParams.is_key("rcut")) rcut = std::stod(theParams.get_value("rcut"));
-    // if(theParams.is_key("k0_bond")) k0_bond = std::stod(theParams.get_value("k0_bond"));
-    // if(theParams.is_key("eps_bond")) eps_bond = std::stod(theParams.get_value("eps_bond"));
-    // if(theParams.is_key("do_cell_list")) do_cell_list = std::stoi(theParams.get_value("do_cell_list"));
-    // if(theParams.is_key("do_neighbor_grid")) do_neighbor_grid = std::stoi(theParams.get_value("do_neighbor_grid"));
-    // if(theParams.is_key("is_network")) is_network = std::stoi(theParams.get_value("is_network"));
-    // if(theParams.is_key("is_aoup")) is_aoup = std::stoi(theParams.get_value("is_aoup"));
-    // if(theParams.is_key("can_bonds_break")) can_bonds_break = std::stoi(theParams.get_value("can_bonds_break"));
-
+	//Random seed
+	if(theParams.is_key("seed")) seed = std::stoi(theParams.get_value("seed"));
+	//Bond spring constants
+	if(theParams.is_key("epsilon0")) epsilon[0] = std::stod(theParams.get_value("epsilon0"));
+	//Dihedral spring constant
+	if(theParams.is_key("kappa0")) kappa[0] = std::stod(theParams.get_value("kappa0"));
+	//Angle spring constant
+	if(theParams.is_key("kappaPhi0")) kappaPhi[0] = std::stod(theParams.get_value("kappaPhi0"));
+	//Bond (dihedral?) angles
+	if(theParams.is_key("theta0")) theta0[0] = std::stod(theParams.get_value("theta0"));
+	if(theParams.is_key("theta1")) theta0[1] = std::stod(theParams.get_value("theta1"));
+	//Overall binding free energy (aka "LnK")
+	if(theParams.is_key("gb0")) gb0 = std::stod(theParams.get_value("gb0"));
+	if(theParams.is_key("dg")) dg = std::stod(theParams.get_value("dg"));
+	//Chemical potentials
+	if(theParams.is_key("muCD")) mu[0] = std::stod(theParams.get_value("muCD"));
+	mu[3] = mu[0];
+	if(theParams.is_key("dmu")) dmu = std::stod(theParams.get_value("dmu"));
+	//if(theParams.is_key("muAB")) mu[1] = std::stod(theParams.get_value("muAB"));
+	//Drug chemical potential
+	if(theParams.is_key("mudrug")) mudrug = std::stod(theParams.get_value("mudrug"));
+	//Drug binding free energy
+	if(theParams.is_key("gdrug0")) gdrug0 = std::stod(theParams.get_value("gdrug0"));
+	//Drug binding rate
+	if(theParams.is_key("kd0")) kd0 = std::stod(theParams.get_value("kd0"));
+	//Relative rate of dimer binding to elastic relaxation
+	if(theParams.is_key("ks0")) ks0 = std::stod(theParams.get_value("ks0"));
+	//Dimer-dimer interaction parameters
+	if(theParams.is_key("dg12")) dg12 = std::stod(theParams.get_value("dg12"));
+	if(theParams.is_key("dg01")) dg01 = std::stod(theParams.get_value("dg01"));
+	if(theParams.is_key("dg20")) dg20 = std::stod(theParams.get_value("dg20"));
+	if(theParams.is_key("dg33")) dg33 = std::stod(theParams.get_value("dg33"));
+	if(theParams.is_key("dg00")) dg00 = std::stod(theParams.get_value("dg00"));
+	if(theParams.is_key("dgother")) dgother = std::stod(theParams.get_value("dgother"));
 }
 
 
@@ -212,14 +279,6 @@ void System::initialize(int Ntype0)
 		vidtoindex[i] = -1;
 		heidtoindex[i] = -1;
 	}
-}
-
-void System::dump_parameters()
-{
-
-	FILE *pfile;
-	pfile = fopen("geo_param.dat", "w");
-	fprintf(pfile, "1");
 }
 
 void System::update_index()
@@ -2688,7 +2747,7 @@ void System::update_normals_vertex(int vindex0)
 	}
 }
 
-void System::update_System_vertex(int vindex0)
+void System::update_geometry_vertex(int vindex0)
 {
 	//cout << "in update System vertex vindex0 " <<vindex0 <<endl;
 	for (vector<int>::iterator ithe = v[vindex0].hein.begin(); ithe != v[vindex0].hein.end(); ithe++)
@@ -4089,7 +4148,7 @@ void randvec(double *v, gsl_rng *r)
 {
 	double psi1 = gsl_rng_uniform(r);
 	double psi2 = gsl_rng_uniform(r);
-	double theta = 2 * PI * psi2;
+	double theta = 2 * M_PI * psi2;
 	double phi = acos(1 - 2 * psi1);
 	v[0] = sin(phi) * cos(theta);
 	v[1] = sin(phi) * sin(theta);
@@ -4104,739 +4163,115 @@ void randvec(double *v, gsl_rng *r)
 	//v[2]/=vlen;
 }
 
-void dump_lammps_traj(System &g, int time0)
+
+void System::update_geometry_parameters()
 {
-	char filename[80];
-	float box = 3.0;
-	sprintf(filename, "trajlammps_bonds.dat");
-	FILE *f;
-	f = fopen(filename, "a");
-	//fprintf(f,"@<TRIPOS>MOLECULE\n");
-
-	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
-	fprintf(f, "\n%d atoms", g.Nv + g.Nd);
-	fprintf(f, "\n%d bonds", g.Nhe / 2);
-	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
-	fprintf(f, "\n");
-	fprintf(f, "\n4 atom types");
-	fprintf(f, "\n4 bond types");
-	fprintf(f, "\n");
-	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
-	fprintf(f, "\n");
-	fprintf(f, "\nAtoms");
-	fprintf(f, "\n");
-	//cout << "here in dump 000"<<endl;
-	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
-	{
-		//cout <<" it->co[0]"<< it->co[0]<< endl;
-		//exit(-1);
-		if (g.is_bond_vboundary(it->vid) > 0)
-		{
-			fprintf(f, "\n%li 3 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-		}
-
-		else if (it->hein.size() == 5 && g.is_vboundary(it->vid) < 0)
-		{
-			fprintf(f, "\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-			
-		}
-		else
-		{
-			fprintf(f, "\n%li 2 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-		}
-		//fprintf(stderr,"\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(),it)+1 ,it->co[0], it->co[1], it->co[2]);
-	}
-	int counter = g.Nv + 1;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		if (it->din == 1)
-		{
-			int vindex = g.vidtoindex[it->vin];
-			double x0 = 0;
-			double x1 = 0;
-			double x2 = 0;
-			if (it->previd != -1)
-			{
-				int preindex = g.heidtoindex[it->previd];
-				x0 = -.1 * g.he[preindex].hevec[0];
-				x1 = -.1 * g.he[preindex].hevec[1];
-				x2 = -.1 * g.he[preindex].hevec[2];
-			}
-			fprintf(f, "\n%d 4 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
-		}
-	}
-
-	fprintf(f, "\n");
-	fprintf(f, "\nBonds");
-	fprintf(f, "\n");
-	//cout <<" "<<endl;
-	//cout << "here in dump 222"<<endl;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		//cout << "edge " <<distance(g.he.begin(),it)+1 <<" " << it->id << "vin vid" << g.vidtoindex[it->vin] << "vout vid" << g.vidtoindex[it->vout] <<endl;
-		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
-		{
-			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
-			exit(-1);
-		}
-		int btype = it->type + 1;
-		//if ( it->type==2) {  btype=2 ;}
-		//if ( it->type==3) {  btype=1 ;}
-		if ((it->type == 1) || (it->type == 0))
-		{
-			fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
-		}
-		//}
-		//if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)<0) {
-		//fprintf(f, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//fprintf(stderr, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//}
-		//else if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)>0) {
-		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//}
-		//else {
-		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it) , g.vidtoindex[it->vin], g.vidtoindex[it->vout]);
-		//}
-	}
-
-	//exit(-1);
-	fprintf(f, "\n");
-	fclose(f);
-}
-
-void dump_lammps_traj_restart(System &g, int time0)
-{ //currently no drug
-	char filename[80];
-	float box = 3.0;
-	sprintf(filename, "trajlammps_restart.dat");
-	FILE *f;
-	f = fopen(filename, "a");
-	//fprintf(f,"@<TRIPOS>MOLECULE\n");
-
-	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
-	fprintf(f, "\n%d atoms", g.Nv);
-	fprintf(f, "\n%d bonds", g.Nhe);
-	fprintf(f, "\n%d angles", g.Nhe);
-	fprintf(f, "\n0 dihedrals");				  //next _ prev
-	fprintf(f, "\n%li impropers", g.boundary.size()); // prev_boundary this next_boundary
-	fprintf(f, "\n");
-	fprintf(f, "\n1 atom types"); //vertex
-	fprintf(f, "\n4 bond types");
-	fprintf(f, "\n1 angle types");
-	fprintf(f, "\n%d improper types", g.Nboundary);
-	fprintf(f, "\n");
-	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
-	fprintf(f, "\n");
-	fprintf(f, "\nAtoms");
-	fprintf(f, "\n");
-
-	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
-	{
-		fprintf(f, "\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-	}
-
-	fprintf(f, "\n");
-	fprintf(f, "\nBonds");
-	fprintf(f, "\n");
-
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
-		{
-			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
-			exit(-1);
-		}
-		int btype = it->type + 1;
-		fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
-	}
-	fprintf(f, "\n");
-	fprintf(f, "\nAngles"); // this is he - next -prev
-	fprintf(f, "\n");
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		int atype = 1;
-		int henext = -1;
-		int heprev = -1;
-		if (it->nextid != -1)
-		{
-			henext = g.heidtoindex[it->nextid];
-		}
-		if (it->previd != -1)
-		{
-			heprev = g.heidtoindex[it->previd];
-		}
-
-		fprintf(f, "\n%li %d %d %d %d", distance(g.he.begin(), it) + 1, atype, g.heidtoindex[it->id] + 1, henext + 1, heprev + 1);
-	}
-
-	fprintf(f, "\n");
-	fprintf(f, "\nImpropers"); // this is he - prev_boundary this next_boundary
-	fprintf(f, "\n");
-	for (vector<int>::iterator it = g.boundary.begin(); it != g.boundary.end(); ++it)
-	{
-		int heindex0 = g.heidtoindex[*it];
-		int btype = 0; //ToDo should be updated!
-		fprintf(f, "\n%li %d %d %d %d", distance(g.boundary.begin(), it) + 1, btype, g.heidtoindex[g.he[heindex0].previd_boundary] + 1, heindex0 + 1, g.he[heindex0].boundary_index);
-	}
-	fprintf(f, "\n");
-	fclose(f);
-}
-
-void dump_lammps_data_file(System &g, int time0)
-{
-	char filename[80];
-	float box = 3.0;
-	sprintf(filename, "snap_%07d.dat", time0);
-	FILE *f;
-	f = fopen(filename, "w");
-	//fprintf(f,"@<TRIPOS>MOLECULE\n");
-
-	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
-	fprintf(f, "\n%d atoms", g.Nv + g.Nd);
-	fprintf(f, "\n%d bonds", g.Nhe / 2);
-	fprintf(f, "\n0 angles");
-	fprintf(f, "\n0 dihedrals");
-	fprintf(f, "\n0 impropers");
-	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
-	fprintf(f, "\n");
-	fprintf(f, "\n4 atom types");
-	fprintf(f, "\n4 bond types");
-	fprintf(f, "\n");
-	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
-	fprintf(f, "\n");
-	fprintf(f, "\nAtoms");
-	fprintf(f, "\n");
-	//cout << "here in dump 000"<<endl;
-	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
-	{
-		//cout <<" it->co[0]"<< it->co[0]<< endl;
-		//exit(-1);
-		if (g.is_bond_vboundary(it->vid) > 0)
-		{
-			fprintf(f, "\n%li 1 3 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-		}
-
-		else if (it->hein.size() == 5 && g.is_vboundary(it->vid) < 0)
-		{
-			fprintf(f, "\n%li 1 1 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-			
-		}
-		else
-		{
-			fprintf(f, "\n%li 1 2 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-		}
-		//fprintf(stderr,"\n%li 1 %10.6f %10.6f %10.6f", distance(g.v.begin(),it)+1 ,it->co[0], it->co[1], it->co[2]);
-	}
-	int counter = g.Nv + 1;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		if (it->din == 1)
-		{
-			int vindex = g.vidtoindex[it->vin];
-			double x0 = 0;
-			double x1 = 0;
-			double x2 = 0;
-			if (it->previd != -1)
-			{
-				int preindex = g.heidtoindex[it->previd];
-				x0 = -.1 * g.he[preindex].hevec[0];
-				x1 = -.1 * g.he[preindex].hevec[1];
-				x2 = -.1 * g.he[preindex].hevec[2];
-			}
-			fprintf(f, "\n%d 1 4 0 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
-		}
-	}
-
-	fprintf(f, "\n");
-	fprintf(f, "\nBonds");
-	fprintf(f, "\n");
-	//cout <<" "<<endl;
-	//cout << "here in dump 222"<<endl;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		//cout << "edge " <<distance(g.he.begin(),it)+1 <<" " << it->id << "vin vid" << g.vidtoindex[it->vin] << "vout vid" << g.vidtoindex[it->vout] <<endl;
-		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
-		{
-			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
-			exit(-1);
-		}
-		int btype = it->type + 1;
-		//if ( it->type==2) {  btype=2 ;}
-		//if ( it->type==3) {  btype=1 ;}
-		if ((it->type == 1) || (it->type == 0))
-		{
-			fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
-		}
-		//}
-		//if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)<0) {
-		//fprintf(f, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//fprintf(stderr, "\n%li 1 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//}
-		//else if ( g.is_boundary(it->id)<0 && g.is_boundary(it->opid)>0) {
-		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//}
-		//else {
-		//fprintf(f, "\n%li 2 %d %d",distance(g.he.begin(),it)+1 , g.vidtoindex[it->vin]+1, g.vidtoindex[it->vout]+1);
-		//fprintf(stderr, "\n%li 2 %d %d",distance(g.he.begin(),it) , g.vidtoindex[it->vin], g.vidtoindex[it->vout]);
-		//}
-	}
-
-	//exit(-1);
-	fprintf(f, "\n");
-	fclose(f);
-}
-
-
-void update_System_parameters(System &g)
-{
-	g.NAB=0;
-	g.NAB_in = 0;
-	g.NCD_Hex = 0;
-	g.NCD_other = 0;
-	g.NCD_T3 = 0;
-	g.NCD_T4 = 0;
-	g.NCD_T3_in = 0;
-	g.NCD_T4_in = 0;
-	g.Nv_in = 0;
-	g.Nhe_in = 0;
-	g.Nv5 =0;
-	g.Nv6=0;
+	NAB=0;
+	NAB_in = 0;
+	NCD_Hex = 0;
+	NCD_other = 0;
+	NCD_T3 = 0;
+	NCD_T4 = 0;
+	NCD_T3_in = 0;
+	NCD_T4_in = 0;
+	Nv_in = 0;
+	Nhe_in = 0;
+	Nv5 =0;
+	Nv6=0;
 	//cout <<"in dump  initialization"<<endl;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	for (vector<HE>::iterator it = he.begin(); it != he.end(); ++it)
 	{
-		//if (it->type==0) g.NCD++;
-		int heindex0 = g.heidtoindex[it->id];
-		int etype = g.he[heindex0].type;
+		//if (it->type==0) NCD++;
+		int heindex0 = heidtoindex[it->id];
+		int etype = he[heindex0].type;
 
 		int nexttype = -1;
 		int prevtype = -1;
 
 		if (it->nextid != -1)
-			nexttype = g.he[g.heidtoindex[it->nextid]].type;
+			nexttype = he[heidtoindex[it->nextid]].type;
 		if (it->previd != -1)
-			prevtype = g.he[g.heidtoindex[it->previd]].type;
+			prevtype = he[heidtoindex[it->previd]].type;
 
-		int opindex0 = g.heidtoindex[it->opid];
-		int opetype = g.he[opindex0].type;
+		int opindex0 = heidtoindex[it->opid];
+		int opetype = he[opindex0].type;
 
 		int opnexttype = -1;
 		int opprevtype = -1;
 		//cout <<"in dump  here 000"<<endl;
-		if (g.he[opindex0].nextid != -1)
-			opnexttype = g.he[g.heidtoindex[g.he[opindex0].nextid]].type;
-		if (g.he[opindex0].previd != -1)
-			opprevtype = g.he[g.heidtoindex[g.he[opindex0].previd]].type;
+		if (he[opindex0].nextid != -1)
+			opnexttype = he[heidtoindex[he[opindex0].nextid]].type;
+		if (he[opindex0].previd != -1)
+			opprevtype = he[heidtoindex[he[opindex0].previd]].type;
 		//cout <<"in dump  here 011"<<endl;
 		//consider only the internal structure
 
 		if ((etype == 1) || (etype == 2))
-			g.NAB++;
+			NAB++;
 
 
 		if (((etype == 0 || etype == 3) && nexttype == 1 && prevtype == 2) && ((opetype == 3 || opetype == 0) && opnexttype == 1 && opprevtype == 2))
 				//cout <<"in dump  here 013"<<endl;
-				g.NCD_T3 += 1; //CD-BA-AB :: DC-BA-AB in T3
+				NCD_T3 += 1; //CD-BA-AB :: DC-BA-AB in T3
 			else if (((etype == 0 || etype == 3) && nexttype == 1 && prevtype == 2) && (opetype == 3 || opetype == 0) && (opnexttype == 0 || opnexttype == 3) && (opprevtype == 0 || opprevtype == 3))
 				//cout <<"in dump  here 014"<<endl;
-				g.NCD_T4 += 1; //CD_BA_AB :: CD-CD-CD"<<endl;
+				NCD_T4 += 1; //CD_BA_AB :: CD-CD-CD"<<endl;
 			else if ((etype == 0 || etype == 3) && (nexttype == 0 || nexttype == 3) && (prevtype == 0 || prevtype == 3) && ((opetype == 3 || opetype == 0) && opnexttype == 1 && opprevtype == 2))
 				//cout <<"in dump  here 015"<<endl;
-				g.NCD_T4 += 1; // CD-CD-CD :: CD-AB-AB
+				NCD_T4 += 1; // CD-CD-CD :: CD-AB-AB
 			else if (((etype == 0 || etype == 3) && (nexttype == 0 || nexttype == 3) && (prevtype == 0 || prevtype == 3)) && ((opetype == 3 || opetype == 0) && (opnexttype == 0 || opnexttype == 3) && (opprevtype == 0 || opprevtype == 3)))
 				//cout <<"in dump  here 016"<<endl;
-				g.NCD_Hex += 1;
+				NCD_Hex += 1;
 			else if ((etype == 0 || etype == 3))
 				//cout <<"in dump  here 017"<<endl;
-				g.NCD_other += 1;
+				NCD_other += 1;
 
-		if (g.he[heindex0].nextid != -1 && g.he[opindex0].nextid != -1 && g.v[g.vidtoindex[g.he[g.heidtoindex[g.he[heindex0].nextid]].vout]].hein.size() > 2 && g.v[g.vidtoindex[g.he[g.heidtoindex[g.he[opindex0].nextid]].vout]].hein.size() > 2)
+		if (he[heindex0].nextid != -1 && he[opindex0].nextid != -1 && v[vidtoindex[he[heidtoindex[he[heindex0].nextid]].vout]].hein.size() > 2 && v[vidtoindex[he[heidtoindex[he[opindex0].nextid]].vout]].hein.size() > 2)
 		{
 			//cout <<"in dump  here 012"<<endl;
 			
 			if (((etype == 0 || etype == 3) && nexttype == 1 && prevtype == 2) && ((opetype == 3 || opetype == 0) && opnexttype == 1 && opprevtype == 2))
 				//cout <<"in dump  here 013"<<endl;
-				g.NCD_T3_in += 1; //CD-BA-AB :: DC-BA-AB in T3
+				NCD_T3_in += 1; //CD-BA-AB :: DC-BA-AB in T3
 			else if (((etype == 0 || etype == 3) && nexttype == 1 && prevtype == 2) && (opetype == 3 || opetype == 0) && (opnexttype == 0 || opnexttype == 3) && (opprevtype == 0 || opprevtype == 3))
 				//cout <<"in dump  here 014"<<endl;
-				g.NCD_T4_in += 1; //CD_BA_AB :: CD-CD-CD"<<endl;
+				NCD_T4_in += 1; //CD_BA_AB :: CD-CD-CD"<<endl;
 			else if ((etype == 0 || etype == 3) && (nexttype == 0 || nexttype == 3) && (prevtype == 0 || prevtype == 3) && ((opetype == 3 || opetype == 0) && opnexttype == 1 && opprevtype == 2))
 				//cout <<"in dump  here 015"<<endl;
-				g.NCD_T4_in += 1; // CD-CD-CD :: CD-AB-AB
+				NCD_T4_in += 1; // CD-CD-CD :: CD-AB-AB
 		}
 
-		if (g.v[g.vidtoindex[it->vin]].hein.size() > 2 && g.v[g.vidtoindex[it->vout]].hein.size() > 2)
+		if (v[vidtoindex[it->vin]].hein.size() > 2 && v[vidtoindex[it->vout]].hein.size() > 2)
 		{
-			g.Nhe_in++;
+			Nhe_in++;
 			if ((etype == 1) || (etype == 2))
-				g.NAB_in++;
+				NAB_in++;
 
 		}
 	}
 
-	g.NAB /= 2;
-	g.NCD_T4 /= 2;
-	g.NCD_T3 /= 2;
-	g.NCD_T4_in /= 2;
-	g.NCD_T3_in /= 2;
-	g.NCD_Hex /= 2;
-	g.NCD_other /= 2;
-	g.Nhe_in /= 2;
-	g.NAB_in /=2;
+	NAB /= 2;
+	NCD_T4 /= 2;
+	NCD_T3 /= 2;
+	NCD_T4_in /= 2;
+	NCD_T3_in /= 2;
+	NCD_Hex /= 2;
+	NCD_other /= 2;
+	Nhe_in /= 2;
+	NAB_in /=2;
 
 
-	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
+	for (vector<VTX>::iterator it = v.begin(); it != v.end(); ++it)
 	{
-		if (it->hein.size()>2) g.Nv_in++;
-		if (g.is_vboundary(it->vid)<0) {
-			if (it->hein.size()==6) g.Nv6++;
-			else if (it->hein.size()==5) g.Nv5++;
+		if (it->hein.size()>2) Nv_in++;
+		if (is_vboundary(it->vid)<0) {
+			if (it->hein.size()==6) Nv6++;
+			else if (it->hein.size()==5) Nv5++;
 		}
 	}
 	
 }
 
-
-void dump_lammps_traj_dimers(System &g, int time0)
-{
-
-	char filename[80];
-	float box = 3.0;
-	
-	sprintf(filename, "trajlammps.dat");
-	FILE *f;
-	f = fopen(filename, "a");
-	//fprintf(f,"@<TRIPOS>MOLECULE\n");
-
-	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
-	fprintf(f, "\n%d atoms", g.Nhe + g.Nhe + g.Nhe + g.Nd + 8);
-	fprintf(f, "\n%d bonds", g.Nhe);
-	fprintf(f, "\n0 angles");
-	fprintf(f, "\n0 dihedrals");
-	fprintf(f, "\n0 impropers");
-	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
-	fprintf(f, "\n");
-	fprintf(f, "\n10 atom types");
-	fprintf(f, "\n4 bond types");
-	fprintf(f, "\n");
-	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
-	fprintf(f, "\n");
-	fprintf(f, "\nAtoms");
-	fprintf(f, "\n");
-	//vin of each half edge
-	int counter = 1;
-
-	//cout <<"in dump  here 222"<<endl;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		//double x0 = g.v[g.vidtoindex[it->vin]].co[0];
-		//double x1 = g.v[g.vidtoindex[it->vin]].co[1];
-		//double x2 = g.v[g.vidtoindex[it->vin]].co[2];
-
-		double x0 = .9 * (g.v[g.vidtoindex[it->vin]].co[0]) + .1 * (g.v[g.vidtoindex[it->vout]].co[0]);
-		double x1 = .9 * (g.v[g.vidtoindex[it->vin]].co[1]) + .1 * (g.v[g.vidtoindex[it->vout]].co[1]);
-		double x2 = .9 * (g.v[g.vidtoindex[it->vin]].co[2]) + .1 * (g.v[g.vidtoindex[it->vout]].co[2]);
-
-		int atype = it->type + 1;
-
-		if (it->type == 1)
-		{ // AB A
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 2)
-		{ //AB B
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 0)
-		{ //CD C
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 3)
-		{ //CD D
-			if (g.is_boundary(it->id) < 0)
-			{
-				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
-				int prevtype = g.he[g.heidtoindex[it->previd]].type;
-
-				if ((nexttype == 1) && (prevtype == 2))
-					atype = 1;
-			}
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-
-		if (g.v[g.vidtoindex[it->vin]].hein.size() > 2 && g.v[g.vidtoindex[it->vout]].hein.size() > 2)
-		{
-			g.Nhe_in++;
-		}
-	}
-	//cout <<"in dump   here 333"<<endl;
-	g.Nhe_in /= 2;
-	//int counter = g.Nhe + 1;
-
-	//he center beads
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		double x0 = it->hecent[0];
-		double x1 = it->hecent[1];
-		double x2 = it->hecent[2];
-		int atype = it->type + 1;
-		if (it->type == 1)
-		{ // AB A
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 2)
-		{ //AB B
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 0)
-		{ //CD C
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 3)
-		{ //CD D
-			if (g.is_boundary(it->id) < 0)
-			{
-				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
-				int prevtype = g.he[g.heidtoindex[it->previd]].type;
-
-				if ((nexttype == 1) && (prevtype == 2))
-					atype = 1;
-			}
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-	}
-	//cout <<"in dump   here 444"<<endl;
-	//drug beads
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		if (it->din == 1)
-		{
-			int vindex = g.vidtoindex[it->vin];
-			double x0 = 0;
-			double x1 = 0;
-			double x2 = 0;
-			if (it->previd != -1)
-			{
-				int preindex = g.heidtoindex[it->previd];
-				x0 = -.1 * g.he[preindex].hevec[0];
-				x1 = -.1 * g.he[preindex].hevec[1];
-				x2 = -.1 * g.he[preindex].hevec[2];
-			}
-			fprintf(f, "\n%d 1 5 0 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
-		}
-	}
-	//cout <<"in dump   here 555"<<endl;
-
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 1, box, box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 2, -box, box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 3, box, -box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 4, box, box, -box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 5, -box, -box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 6, -box, box, -box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 7, box, -box, -box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 8, -box, -box, -box);
-
-	counter += 8;
-	//temp
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		double x0 = it->hetop[0];
-		double x1 = it->hetop[1];
-		double x2 = it->hetop[2];
-		//int atype=-1;
-		//if ((it->type == 1) | (it->type == 2)) atype=2;
-
-		int atype = 7 + it->type;
-
-		fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-	}
-	//cout <<"in dump   here 666"<<endl;
-	// now bonds
-	fprintf(f, "\n");
-	fprintf(f, "\nBonds");
-	fprintf(f, "\n");
-
-	//edge_counter=1;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		// 1 A 2 B 3 C 4 D
-		int btype = it->type + 1;
-		//vin and the middle
-		int index = distance(g.he.begin(), it);
-		fprintf(f, "\n%d %d %d %d", index + 1, btype, index + 1, g.Nhe + index + 1);
-	}
-	//cout <<"in dump   here 777"<<endl;
-	fprintf(f, "\n");
-	fclose(f);
-}
-
-void dump_lammps_data_dimers(System &g, int time0)
-{
-
-	char filename[80];
-	float box = 3.0;
-	sprintf(filename, "snap_%07d.dat", time0);
-	FILE *f;
-	f = fopen(filename, "w");
-	//fprintf(f,"@<TRIPOS>MOLECULE\n");
-
-	fprintf(f, "LAMMPSDescription-Generated by HEVA at time_step=%d\n", time0);
-	fprintf(f, "\n%d atoms", g.Nhe + g.Nhe + g.Nd + 8);
-	fprintf(f, "\n%d bonds", g.Nhe);
-	fprintf(f, "\n0 angles");
-	fprintf(f, "\n0 dihedrals");
-	fprintf(f, "\n0 impropers");
-	//fprintf(f,"\n%d bonds",g.Nhe/2+g.Nsurf);
-	fprintf(f, "\n");
-	fprintf(f, "\n6 atom types");
-	fprintf(f, "\n4 bond types");
-	fprintf(f, "\n");
-	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
-	fprintf(f, "\n");
-	fprintf(f, "\nAtoms");
-	fprintf(f, "\n");
-	//cout << "here in dump 000"<<endl;
-	int counter = 1;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		//double x0 = g.v[g.vidtoindex[it->vin]].co[0];
-		//double x1 = g.v[g.vidtoindex[it->vin]].co[1];
-		//double x2 = g.v[g.vidtoindex[it->vin]].co[2];
-
-		double x0 = .9 * (g.v[g.vidtoindex[it->vin]].co[0]) + .1 * (g.v[g.vidtoindex[it->vout]].co[0]);
-		double x1 = .9 * (g.v[g.vidtoindex[it->vin]].co[1]) + .1 * (g.v[g.vidtoindex[it->vout]].co[1]);
-		double x2 = .9 * (g.v[g.vidtoindex[it->vin]].co[2]) + .1 * (g.v[g.vidtoindex[it->vout]].co[2]);
-
-		int atype = it->type + 1;
-
-		//The "1" and "0" entries are just here to be consistent with lammps data format
-		//so that vmd topotools can read the files 
-
-		if (it->type == 1)
-		{ // AB A
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 2)
-		{ //AB B
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 0)
-		{ //CD C
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 3)
-		{ //CD D
-			if (g.is_boundary(it->id) < 0)
-			{
-				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
-				int prevtype = g.he[g.heidtoindex[it->previd]].type;
-
-				if ((nexttype == 1) && (prevtype == 2))
-					atype = 1;
-			}
-			fprintf(f, "\n%d 1 %d %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-	}
-	//int counter = g.Nhe + 1;
-
-	//he center beads
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		double x0 = it->hecent[0];
-		double x1 = it->hecent[1];
-		double x2 = it->hecent[2];
-		int atype = it->type + 1;
-		if (it->type == 1)
-		{ // AB A
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 2)
-		{ //AB B
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 0)
-		{ //CD C
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-		else if (it->type == 3)
-		{ //CD D
-			if (g.is_boundary(it->id) < 0)
-			{
-				int nexttype = g.he[g.heidtoindex[it->nextid]].type;
-				int prevtype = g.he[g.heidtoindex[it->previd]].type;
-
-				if ((nexttype == 1) && (prevtype == 2))
-					atype = 1;
-			}
-			fprintf(f, "\n%d 1 %d 0 %10.6f %10.6f %10.6f", counter++, atype, x0, x1, x2);
-		}
-	}
-
-	//drug beads
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		if (it->din == 1)
-		{
-			int vindex = g.vidtoindex[it->vin];
-			double x0 = 0;
-			double x1 = 0;
-			double x2 = 0;
-			if (it->previd != -1)
-			{
-				int preindex = g.heidtoindex[it->previd];
-				x0 = -.1 * g.he[preindex].hevec[0];
-				x1 = -.1 * g.he[preindex].hevec[1];
-				x2 = -.1 * g.he[preindex].hevec[2];
-			}
-			fprintf(f, "\n%d 1 5 %10.6f %10.6f %10.6f", counter++, x0 + (g.v[vindex]).co[0] + .15 * (it->hevec[0]), x1 + g.v[vindex].co[1] + .15 * (it->hevec[1]), x2 + g.v[vindex].co[2] + .15 * (it->hevec[2]));
-		}
-	}
-
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 1, box, box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 2, -box, box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 3, box, -box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 4, box, box, -box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 5, -box, -box, box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 6, -box, box, -box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 7, box, -box, -box);
-	fprintf(f, "\n%d 1 6 0 %10.6f %10.6f %10.6f", 2 * g.Nhe + g.Nd + 8, -box, -box, -box);
-	// now bonds
-	fprintf(f, "\n");
-	fprintf(f, "\nBonds");
-	fprintf(f, "\n");
-
-	//edge_counter=1;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-		// 1 A 2 B 3 C 4 D
-		int btype = it->type + 1;
-		//vin and the middle
-		int index = distance(g.he.begin(), it);
-		fprintf(f, "\n%d %d %d %d", index + 1, btype, index + 1, g.Nhe + index + 1);
-	}
-
-	//exit(-1);
-	fprintf(f, "\n");
-	fclose(f);
-}
 
 void rotatevec(double *vec, double *axis, double angle, double *vec2)
 {
@@ -5372,219 +4807,6 @@ int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step = -1)
 	return (0);
 }
 
-void dump_restart_lammps_data_file(System &g, int time0)
-{ //currently no drug
-	char filename[80];
-	float box = 3.0;
-	sprintf(filename, "restart_lammps.dat");
-	FILE *f;
-	f = fopen(filename, "w");
-
-	fprintf(f, "HEVA-LAMMPSDescription-Generated  time_step= %d\n", time0);
-	fprintf(f, "\n%d atoms", g.Nv);
-	fprintf(f, "\n%d bonds", g.Nhe);
-	fprintf(f, "\n%d angles", g.Nhe);				  //next _ prev
-	fprintf(f, "\n0 dihedrals");
-	fprintf(f, "\n%li impropers", g.boundary.size()); // prev_boundary this next_boundary
-	fprintf(f, "\n");
-	fprintf(f, "\n1 atom types"); //vertex
-	fprintf(f, "\n4 bond types");
-	fprintf(f, "\n1 angle types");
-	fprintf(f, "\n%d improper types", g.Nboundary);
-	fprintf(f, "\n");
-	fprintf(f, "\n%8.3f %8.3f xlo xhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f ylo yhi", -box, box);
-	fprintf(f, "\n%8.3f %8.3f zlo zhi", -box, box);
-	fprintf(f, "\n");
-	fprintf(f, "\nAtoms");
-	fprintf(f, "\n");
-
-	for (vector<VTX>::iterator it = g.v.begin(); it != g.v.end(); ++it)
-	{
-		fprintf(f, "\n%li 1 1 0 %10.6f %10.6f %10.6f", distance(g.v.begin(), it) + 1, it->co[0], it->co[1], it->co[2]);
-	}
-
-	fprintf(f, "\n");
-	fprintf(f, "\nBonds");
-	fprintf(f, "\n");
-
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
-		{
-			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
-			exit(-1);
-		}
-		int btype = it->type + 1;
-		fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
-	}
-	fprintf(f, "\n");
-	fprintf(f, "\nAngles"); // this is he - next -prev
-	fprintf(f, "\n");
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		int atype = 1;
-		int henext = -1;
-		int heprev = -1;
-		if (it->nextid != -1)
-		{
-			henext = g.heidtoindex[it->nextid];
-		}
-		if (it->previd != -1)
-		{
-			heprev = g.heidtoindex[it->previd];
-		}
-
-		fprintf(f, "\n%li %d %d %d %d", distance(g.he.begin(), it) + 1, atype, g.heidtoindex[it->id] + 1, henext + 1, heprev + 1);
-	}
-
-	fprintf(f, "\n");
-	fprintf(f, "\nImpropers"); // this is he - prev_boundary this next_boundary
-	fprintf(f, "\n");
-	for (vector<int>::iterator it = g.boundary.begin(); it != g.boundary.end(); ++it)
-	{
-		int heindex0 = g.heidtoindex[*it];
-		int btype = 0; //ToDo should be updated!
-		fprintf(f, "\n%li %d %d %d %d", distance(g.boundary.begin(), it) + 1, btype, g.heidtoindex[g.he[heindex0].previd_boundary] + 1, heindex0 + 1, g.he[heindex0].boundary_index);
-	}
-	fprintf(f, "\n");
-	fclose(f);
-}
-
-void dump_data_frame(System &g, FILE *f, int time)
-{
-	double avgL0 = 0, avgL1 = 0, avgTheta0 = 0, avgTheta1 = 0, avgPhi00 = 0, avgPhi11 = 0, avgPhi01 = 0;
-	int L0 = 0, L1 = 0, Theta0 = 0, Theta1 = 0, Phi00 = 0, Phi11 = 0, Phi01 = 0;
-
-	fprintf(f, "<configuration time_step=\"%d\">\n", time);
-	fprintf(f, "<Edges num=\"%d\">\n", g.Nhe);
-
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		fprintf(f, "%d %li %.4f\n", it->type, distance(g.he.begin(), it), it->l);
-		//fprintf(stderr, "%d %d %.4f\n",  it->type,distance(g.he.begin(),it),it->l);
-		if (it->type == 0)
-		{
-			avgL0 += it->l;
-			L0 += 1;
-		}
-		else if (it->type == 1)
-		{
-			avgL1 += it->l;
-			L1 += 1;
-		}
-	}
-	fprintf(f, "<Theta>\n");
-	//fprintf(stderr,"<Theta>\n");
-	double theta;
-	//for (int edge=0; edge<Ne; edge++)
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		//{
-		//if (t[edge][1] != -1 && t[edge][0] != -1) {
-
-		//cout << "      normal " << it->n[0] << " " << it->n[1] << " " << it->n[2] << " " <<endl <<endl;
-		//cout << "other  normal" << g.he[g.heidtoindex[it->opid)].n[0] << " " << g.he[g.heidtoindex[it->opid)].n[1] << " " << g.he[g.heidtoindex[it->opid)].n[2] << endl;
-		//cout << dot(it->n,g.he[g.heidtoindex[it->opid)].n) <<endl;
-		double ndot = dot(it->n, g.he[g.heidtoindex[it->opid]].n);
-		if (ndot < -1)
-		{
-			ndot = -1;
-		}
-		//cout << "ndot is"  << ndot <<endl;
-		theta = acos(ndot);
-		//}
-		fprintf(f, "%d %li %.4f\n", it->type, distance(g.he.begin(), it), theta);
-		//fprintf(stderr, "%d %d %.4f\n", it->type, distance(g.he.begin(),it), theta);
-		if (it->type == 0)
-		{
-			avgTheta0 += theta;
-			Theta0 += 1;
-			//cout << "Theta0  " << Theta0 <<endl;
-			//cout <<  "avgTheta0" << avgTheta0 <<endl;
-		}
-		else if (it->type == 1)
-		{
-			avgTheta1 += theta;
-			Theta1 += 1;
-			//cout << "Theta1  " << Theta1 <<endl;
-			//cout << "avgTheta1  " << avgTheta1 <<endl;
-		}
-		else
-		{
-			cout << "ERRRRRRRRRRRRRRRRRRRORRRRRRRRRRRRRRR , it->id" << endl;
-		}
-	}
-
-	//cout << "avgTheta1/Theta1 " << avgTheta1/Theta1 <<endl;
-	//cout << "avgTheta0/Theta0 " << avgTheta0/Theta0 <<endl;
-
-	fprintf(f, "<Phi>\n");
-	//fprintf(stderr,"<Phi>\n");
-	//update_Phi();
-	int phitype = -1;
-	double phi;
-	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-	{
-
-		int nextindex = g.heidtoindex[it->nextid];
-		int opindex = g.heidtoindex[it->opid];
-		double ndot = (dot(g.he[opindex].hevec, g.he[nextindex].hevec) / (g.he[opindex].l * g.he[nextindex].l));
-		if (ndot < -1)
-		{
-			ndot = -1;
-		}
-		if (ndot > 1)
-		{
-			ndot = 1;
-		}
-		phi = acos(ndot);
-		int nexttype = g.he[nextindex].type;
-		//cout << " type " << it->type << "nexttype" << nexttype <<endl;
-		if (it->type == 0 && nexttype == 0)
-		{
-			phitype = 0;
-			avgPhi00 += phi;
-			Phi00 += 1;
-			//cout << ":Phi00" <<Phi00 <<endl;
-		}
-		else if ((it->type == 0 && nexttype == 1) || (it->type == 1 && nexttype == 0))
-		{
-			phitype = 2;
-			avgPhi01 += phi;
-			Phi01 += 1;
-		}
-		else if ((it->type == 1 && nexttype == 1))
-		{
-			phitype = 1;
-			avgPhi11 += phi;
-			Phi11 += 1;
-		}
-		fprintf(f, "%d %d %d %.4f\n", phitype, it->id, it->nextid, phi);
-		//fprintf(stderr, "%d %d %d %.4f\n", phitype, it->id, it->nextid,phi);
-	}
-	fprintf(stderr, " L0 %.d L1 %.d Theta0 %.d Theta1 %.d Phi00 %.d Phi11 %.d Phi01 %.d \n", L0, L1, Theta0, Theta1, Phi00, Phi11, Phi01);
-	fprintf(stderr, " L0 %.3f L1 %.3f Theta0 %.3f Theta1 %.3f Phi00 %.3f Phi11 %.3f Phi01 %.3f \n", avgL0 / L0, avgL1 / L1, avgTheta0 / Theta0, avgTheta1 / Theta1, avgPhi00 / Phi00, avgPhi11 / Phi11, avgPhi01 / Phi01);
-}
-
-void dump_analysis(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1)
-{
-
-	if (sweep == 0)
-		fprintf(ofile, "sweep,seed,seconds,epsilon,kappa,kappaPhi,theta0,theta1,gb0,mu,dmu,dg,theta2,energy,binding_energy,Nv5,Nv6,NAB,NAB_in,NCD_Hex,NCD_other,NVin,Nhein,NCD_T4_in, NCD_T3_in,NCD_T4,NCD_T3,Nv,NE,Nsurf,Nboundary\n");
-																			//Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 	NVin,	Nhein,NCD_T4,	NCD_T3,	Nv,	NE,	Nsurf, Nboundary\n");
-	update_System_parameters(g);
-
-	fprintf(ofile, "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-			sweep, seed, seconds, g.epsilon[0], g.kappa[0], g.kappaPhi[0], g.theta0[0], g.theta0[1], g.gb0, g.mu[0], g.mu[1] - g.mu[0], g.dg, g.theta0[2],
-			g.compute_energy(),g.compute_bind_energy(), g.Nv5, g.Nv6, g.NAB, g.NAB_in,  g.NCD_Hex, g.NCD_other, g.Nv_in,g.Nhe_in,g.NCD_T4_in, g.NCD_T3_in,g.NCD_T4, g.NCD_T3,  g.Nv, g.Nhe / 2,g.Nsurf, g.Nboundary);
-			                    //Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 		NVin,	Nhein,NCD_T4,	NCD_T3,		Nv,		NE,		Nsurf, 	Nboundary\n");
-	fflush(ofile);
-}
 
 void recenter(System &g)
 {
@@ -5673,8 +4895,8 @@ void make_initial_triangle(System &g)
 	for (int i = 0; i < 3; i++)
 	{
 		g.add_vertex(xyz0);
-		xyz0[0] = cos(i * PI / 3);
-		xyz0[1] = sin(i * PI / 3);
+		xyz0[0] = cos(i * M_PI / 3);
+		xyz0[1] = sin(i * M_PI / 3);
 		xyz0[2] = 0;
 	}
 	//for (int i=0; i<3; i++) {
@@ -5716,8 +4938,8 @@ void make_initial_pentamer(System &g)
 	for (int i = 0; i < 3; i++)
 	{
 		g.add_vertex(xyz0);
-		xyz0[0] = cos(i * PI / 3);
-		xyz0[1] = sin(i * PI / 3);
+		xyz0[0] = cos(i * M_PI / 3);
+		xyz0[1] = sin(i * M_PI / 3);
 		xyz0[2] = 0;
 	}
 	//for (int i=0; i<3; i++) {
@@ -5832,7 +5054,7 @@ Observer System::get_obs() {
 double System::get_order_parameter() {
     
     if (order_parameter=="single_particle_x") {
-        return particles[0].pos(0);
+        return 0;//g.particles[0].pos(0);
     }
     else{
         std::cout << "Error: order parameter not yet implemented!" << std::endl;

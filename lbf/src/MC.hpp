@@ -41,6 +41,9 @@ public:
     int wedgefusion = 0;
     int wedgefission = 0;
     int boundtri = 0;
+    int binding = 0;
+    int unbinding = 0;
+    int minhe_fission = 50;
 
     /*** Random Number Generator ***/    
     gsl_rng *rg;
@@ -70,7 +73,7 @@ public:
     int old_attempt_vertex_fusion(System &g, int heid0);
     int attempt_vertex_fusion(System &g);
 
-    int attempt_wedge_fusion(System &g,  gsl_rng *r);
+    int attempt_wedge_fusion(System &g);
     int attempt_wedge_fission(System &g);
 
     int attempt_fusion(System &g);
@@ -94,7 +97,7 @@ public:
     void make_seed(System &g);
     void make_seed_T3(System &g);
     void get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2);
-    int force_add_monomer_with_next(System &g, int heid0, int xid,gsl_rng *r);
+    int force_add_monomer_with_next(System &g, int heid0, int xid);
 
 
 };
