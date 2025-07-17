@@ -104,7 +104,7 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
         for (int j = 0; j < Ntype; j++)
         {
             if( i == 0 && j == 0)
-                gdrug[i][j] = 0.6*gb0;
+                gdrug[i][j] = gdrug0;
             else
                 gdrug[i][j] = 0;
         }
@@ -117,10 +117,10 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
         {
 	 if(i==0){
             if( j == 0)
-                gdrug[i][j] = 1.0*gb0;}
+                gdrug[i][j] = 1.0*gdrug0;}
 	if(i==3){
 		if(j==3)
-			gdrug[i][j]= 1.0*gb0;}
+			gdrug[i][j]= 1.0*gdrug0;}
         }
     }
 
@@ -3520,7 +3520,7 @@ double System::bend_energy(int heindex0)
 
 	else if (((etype == 0 || etype == 3) && (nexttype == 0 || nexttype == 3) && (prevtype == 0 || prevtype == 3)) && ((opetype == 3 || opetype == 0) && (opnexttype == 0 || opnexttype == 3) && (opprevtype == 0 || opprevtype == 3)))
 	{
-		angle0 = 2;
+		angle0 = 3; //should this be 3 instead?
 	}
 
 	else

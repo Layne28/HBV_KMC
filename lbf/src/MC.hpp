@@ -73,6 +73,9 @@ public:
     int old_attempt_vertex_fusion(System &g, int heid0);
     int attempt_vertex_fusion(System &g);
 
+    int attempt_add_monomer_dimer_drug(System &g, int heid0);
+    int attempt_remove_monomer_dimer_drug(System &g, int heid0);
+
     int attempt_wedge_fusion(System &g);
     int attempt_wedge_fission(System &g);
 
