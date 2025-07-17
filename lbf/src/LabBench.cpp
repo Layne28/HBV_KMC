@@ -61,8 +61,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     // set up an output file
     FILE *ofile, *finalfile, *fi, *paramfile;
 
-    ofile = fopen((obs.output_dir + "/energy.dat").c_str(), "a");
-    
+    ofile = fopen((obs.output_dir + "/" + subdir + "/energy.dat").c_str(), "a");
+
     // if (obs.do_h5md==1) {
     //     obs.open_h5md(sys, subdir);
     // }
@@ -88,7 +88,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             sys.check_odd_neigh();
             ee = sys.compute_energy();
 
-            dump_lammps_traj_dimers(sys, i);
+            
 
             time(&timer2);
             seconds = difftime(timer2, timer1);
@@ -99,6 +99,11 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             dump_lammps_data_dimers(sys, 11111111);
 
             dump_restart_lammps_data_file(sys, i);
+        }
+
+        if (i % obs.particles_freq == 0)
+        {
+            dump_lammps_traj_dimers(sys, i);
         }
 
         if (i % obs.print_freq == 0 )
@@ -250,9 +255,62 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
         }
         //sweep_count++;
 
+        //Dump configuration
+        //dump_lammps_traj_dimers(sys, i);
+        //dump_restart_lammps_data_file(sys, i);
         //Advance dynamics
         solver.sweep(sys);
     }
+
+    dump_lammps_traj_dimers(sys, frame++);
+    dump_lammps_data_file(sys, 22222222);
+    dump_lammps_data_dimers(sys, 11111111);
+    dump_restart_lammps_data_file(sys, nstps);
+
+    time(&timer2);
+    seconds = difftime(timer2, timer1);
+    cout << " ################  FULL RUN TIME " << seconds << " SECONDS ###############" << endl;
+    cout << " ############# SWEEP " << nstps << "##############" << endl;
+
+    double ee = sys.compute_energy();
+    cout << "######### ENERGY " << ee << " ##############" << endl;
+    cout << "######### ENERGY PER DIMER " << 2 * ee / sys.Nhe << " ##############" << endl;
+    cout << "#########  NHE " << sys.Nhe << " #######################" << endl;
+    cout << "#########  NHESURF " << sys.boundary.size() << " ##############" << endl;
+    cout << "#########  NVSURF " << sys.boundaryv.size() << " ##############" << endl;
+    cout << "#########  NV_BONDSURF " << sys.boundaryvbond.size() << " ##############" << endl;
+    cout << "#########  NV5 " << sys.Nv5 << " ##############" << endl;
+    cout << "#########  MONOMER ADDED " << monomeradded << " ##############" << endl;
+    cout << "#########  MONOMER REMOVED " << monomerremoved << " ##############" << endl;
+    cout << "#########  DIMER ADDED " << dimeradded << " ##############" << endl;
+    cout << "#########  DIMER REMOVED " << dimerremoved << " ##############" << endl;
+    cout << "#########  no rate REMOVED " << deletednorate << " ##############" << endl;
+    cout << "#########  Surface bound " << solver.binding << " ##############" << endl;
+    cout << "#########  Surface Unbound " << solver.unbinding << " ##############" << endl;
+    cout << "#########  DrugAdded " << drugadded << " ##############" << endl;
+    cout << "#########  DrugRemoved " << drugremoved << " ##############" << endl;
+    cout << "#########  ND " << sys.Nd << " ##############" << endl;
+    cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
+    cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
+    cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
+    cout << "#########  FUSION " << fusion << " ##############" << endl;
+    cout << "#########  FISSION " << fission << " ##############" << endl;
+    cout << "#########  FUSION HALFEDGES " << sys.fusionhe.size() << " ##############" << endl;
+    cout << "#########  WEDGE FUSION HALFEDGES " << sys.fusionwedgehe.size() << " ##############" << endl;
+    cout << "#########  ALL NEIGH " << sys.all_neigh << " ##############" << endl;
+    cout << "#########  Nboundary " << sys.Nboundary << " ##############" << endl;
+    cout << "#########  Bound Triangle " << boundtri << " ##############" << endl;
+    cout << "#########  NCD_Hex" << sys.NCD_Hex << "#################"<<endl;
+
+    time(&timer2);
+    seconds = difftime(timer2, timer1);
+
+    dump_analysis(sys, ofile, nstps, seed, seconds);
+    finalfile = fopen((obs.output_dir + "/last.dat").c_str(), "w");
+    dump_analysis(sys, finalfile, nstps, seed, seconds);
+
+    fclose(ofile);
+    fclose(finalfile);
 }
 
 void LabBench::do_simulation(std::string expt)
@@ -277,6 +335,11 @@ void LabBench::do_simulation(std::string expt)
 
 void LabBench::run_standard_simulation()
 {
+
+    std::cout << "Creating initial configuration..." << std::endl;
+    //TODO: add a flag in .in file to specify how to create the initial configuration
+    make_initial_triangle(sys);
+
     std::cout << "Equilibrating..." << std::endl;
     this->run_equil(this->equil_steps);
 

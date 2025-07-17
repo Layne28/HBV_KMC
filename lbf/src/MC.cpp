@@ -286,15 +286,24 @@ void MC::sweep(System &g)
     ps_attempt = ks0 * g.Nsurf;
     if (gsl_rng_uniform(rg) < ps_attempt)
     {
+        //std::cout << "Attempt to add monomer/dimer" << std::endl;
+        //std::cout << ps_attempt << std::endl;
         int ind = gsl_rng_uniform_int(rg, g.boundary.size());
         int e = g.boundary[ind];
         if (g.check_inside_overlap(e) > 0)
         {
+            //std::cout << "Attempt to add monomer/dimer 2" << std::endl;
+            //std::cout << ps_attempt << std::endl;
             ssadd = attempt_add_monomer_dimer(g, e);
-            if (ssadd > 1)
+            //std::cout << ssadd << std::endl;
+            if (ssadd > 1){
                 dimeradded++;
-            else if (ssadd > 0)
+                //std::cout << "Dimer added" << std::endl;
+            }
+            else if (ssadd > 0){
                 monomeradded++;
+                //std::cout << "Monomer added" << std::endl;
+            }
             ssadd = -1;
             g.update_boundary();
         }
@@ -307,9 +316,12 @@ void MC::sweep(System &g)
         ps_attempt = ks0 * g.Nsurf;
         if (gsl_rng_uniform(rg) < ps_attempt)
         {
+            //std::cout << "Attempt to remove monomer/dimer" << std::endl;
+            //std::cout << ps_attempt << std::endl;
             //if (sweep > 0 && g.Nhe > 6)
             if (g.Nhe > 6)
             {
+                //std::cout << "Attempt to remove monomer/dimer 2" << std::endl;
                 int ind = gsl_rng_uniform_int(rg, g.boundary.size());
                 int e = g.boundary[ind];
                 if (g.no_bond_boundary(e) > 0)

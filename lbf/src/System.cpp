@@ -66,8 +66,63 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	kappaPhi[3] = kappaPhi[0];
 	theta0[2] = theta0[0];
 	theta0[3] = theta0[0];
+	mu[3] = mu[0];
 	mu[1] = mu[0] + dmu;
 	mu[2] = mu[1];
+
+	/* GB (dimer-dimer interaction) parameteres */
+    for (int i = 0; i < Ntype; i++)
+    {
+        for (int j = 0; j < Ntype; j++)
+        {
+
+            if (i == 1 && j == 2) // BA-AB
+                gb[i][j] = (1 + dg12) * gb0;
+            else if (i == 0 && j == 1) // CD-AB (T3)
+                gb[i][j] = (1 + dg01) * gb0;
+            else if (i == 3 && j == 1) // DC-AB
+                gb[i][j] = (1 + dg01) * gb0;
+            else if (i == 2 && j == 0) // AB-DC
+                gb[i][j] = (1 + dg20) * gb0;
+            else if (i == 2 && j == 3) // AB-CD?
+                gb[i][j] = (1 + dg20) * gb0;
+            else if (i == 3 && j == 3) // DC-CD?
+                gb[i][j] = (1 + dg33) * gb0;
+            else if (i == 0 && j == 0) // CD-DC?
+                gb[i][j] = (1 + dg00) * gb0;
+            else if (i == 0 && j == 3) // CD-CD?
+                gb[i][j] = (1 + dg00) * gb0;
+            else if (i == 3 && j == 0) // DC-DC?
+                gb[i][j] = (1 + dg00) * gb0;
+            else
+                gb[i][j] = (1 + dgother) * gb0;
+        }
+    }
+
+ 	for (int i = 0; i < Ntype; i++)
+    {
+        for (int j = 0; j < Ntype; j++)
+        {
+            if( i == 0 && j == 0)
+                gdrug[i][j] = 0.6*gb0;
+            else
+                gdrug[i][j] = 0;
+        }
+    }
+
+
+    for (int i = 0; i < Ntype; i++)
+    {
+        for (int j = 0; j < Ntype; j++)
+        {
+	 if(i==0){
+            if( j == 0)
+                gdrug[i][j] = 1.0*gb0;}
+	if(i==3){
+		if(j==3)
+			gdrug[i][j]= 1.0*gb0;}
+        }
+    }
 
 	// gaussian
     double alp=1;
