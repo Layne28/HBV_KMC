@@ -11,6 +11,7 @@ LabBench::LabBench(ParamDict& theParams, gsl_rng*& theGen) : sys(theParams, theG
     if(theParams.is_key("production_steps")) production_steps = std::stoi(theParams.get_value("production_steps"));
     if(theParams.is_key("info_freq")) info_freq = std::stoi(theParams.get_value("info_freq"));
     if(theParams.is_key("simulation")) simulation = theParams.get_value("simulation");
+    if(theParams.is_key("initial_config")) initial_config = theParams.get_value("initial_config");
     if(theParams.is_key("seed")) seed = std::stoi(theParams.get_value("seed"));
 }
 
@@ -193,9 +194,9 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
                     {
             //         cout << "STOP for now - mixed morph" << endl;
                         sys.update_boundary();
-                        dump_lammps_traj_dimers(sys, int(i));
-                        dump_lammps_data_dimers(sys, 44444444);
-                        dump_lammps_data_dimers(sys, 11111111);
+                        //dump_lammps_traj_dimers(sys, int(i));
+                        //dump_lammps_data_dimers(sys, 44444444);
+                        //dump_lammps_data_dimers(sys, 11111111);
                         time(&timer2);
                         seconds = difftime(timer2, timer1);
                         dump_analysis(sys, ofile, i, seed, seconds);
@@ -211,8 +212,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
                     fprintf(stderr, "STOP for now - not growing\n");
                     sys.update_boundary();
                     //dump_lammps_traj_dimers(g, int(sweep_count));
-                    dump_lammps_data_dimers(sys, 333333333);
-                    dump_lammps_data_dimers(sys, 11111111);
+                    //dump_lammps_data_dimers(sys, 333333333);
+                    //dump_lammps_data_dimers(sys, 11111111);
                     dump_restart_lammps_data_file(sys, i);
                     time(&timer2);
                     seconds = difftime(timer2, timer1);
@@ -244,9 +245,9 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
 
         // fprintf(stderr, "STOP for now - too large\n");
             sys.update_boundary();
-            dump_lammps_traj_dimers(sys, int(i));
-            dump_lammps_data_dimers(sys, 88888888);
-            dump_lammps_data_dimers(sys, 11111111);
+            //dump_lammps_traj_dimers(sys, int(i));
+            //dump_lammps_data_dimers(sys, 88888888);
+            //dump_lammps_data_dimers(sys, 11111111);
             dump_restart_lammps_data_file(sys, i);
             time(&timer2);
             seconds = difftime(timer2, timer1);
@@ -338,7 +339,22 @@ void LabBench::run_standard_simulation()
 
     std::cout << "Creating initial configuration..." << std::endl;
     //TODO: add a flag in .in file to specify how to create the initial configuration
-    make_initial_triangle(sys);
+    if(initial_config=="triangle"){
+        make_initial_triangle(sys);
+    }
+    else if(initial_config=="diamond_T4"){
+        make_initial_diamond_T4(sys);
+    }
+    else if(initial_config=="diamond_CD"){
+        make_initial_diamond_CD(sys);
+    }
+    else if(initial_config=="pentamer"){
+        make_initial_pentamer(sys);
+    }
+    else{
+        std::cout << "Error: initial configuration type not recognized." << std::endl;
+        exit(-1);
+    }
 
     std::cout << "Equilibrating..." << std::endl;
     this->run_equil(this->equil_steps);

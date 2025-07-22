@@ -64,11 +64,13 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	kappaPhi[1] = kappaPhi[0];
 	kappaPhi[2] = kappaPhi[0];
 	kappaPhi[3] = kappaPhi[0];
-	theta0[2] = theta0[0];
-	theta0[3] = theta0[0];
+	theta0[2] = theta0[1];//theta0[0];
+	theta0[3] = 0.0;//theta0[0];
 	mu[3] = mu[0];
 	mu[1] = mu[0] + dmu;
 	mu[2] = mu[1];
+
+	std::cout << mu[0] << " " << mu[1] << " " << mu[2] << " " << mu[3] << std::endl;
 
 	/* GB (dimer-dimer interaction) parameteres */
     for (int i = 0; i < Ntype; i++)
@@ -84,43 +86,82 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
                 gb[i][j] = (1 + dg01) * gb0;
             else if (i == 2 && j == 0) // AB-DC
                 gb[i][j] = (1 + dg20) * gb0;
-            else if (i == 2 && j == 3) // AB-CD?
+            else if (i == 2 && j == 3) // AB-DC
                 gb[i][j] = (1 + dg20) * gb0;
-            else if (i == 3 && j == 3) // DC-CD?
+            else if (i == 3 && j == 3) // DC-DC
                 gb[i][j] = (1 + dg33) * gb0;
-            else if (i == 0 && j == 0) // CD-DC?
+            else if (i == 0 && j == 0) // CD-CD
                 gb[i][j] = (1 + dg00) * gb0;
-            else if (i == 0 && j == 3) // CD-CD?
-                gb[i][j] = (1 + dg00) * gb0;
-            else if (i == 3 && j == 0) // DC-DC?
-                gb[i][j] = (1 + dg00) * gb0;
+            else if (i == 0 && j == 3) // CD-DC
+                gb[i][j] = (1 + dgother) * gb0;
+            else if (i == 3 && j == 0) // DC-CD
+                gb[i][j] = (1 + dgother) * gb0;
             else
                 gb[i][j] = (1 + dgother) * gb0;
         }
     }
 
- 	for (int i = 0; i < Ntype; i++)
+ 	// for (int i = 0; i < Ntype; i++)
+    // {
+    //     for (int j = 0; j < Ntype; j++)
+    //     {
+    //         if( i == 0 && j == 0)
+    //             gdrug[i][j] = gdrug0;
+    //         else
+    //             gdrug[i][j] = 0;
+    //     }
+    // }
+
+
+    // for (int i = 0; i < Ntype; i++)
+    // {
+    //     for (int j = 0; j < Ntype; j++)
+    //     {
+	//  if(i==0){
+    //         if( j == 0)
+    //             gdrug[i][j] = 1.0*gdrug0;}
+	// if(i==3){
+	// 	if(j==3)
+	// 		gdrug[i][j]= 1.0*gdrug0;}
+    //     }
+    // }
+
+	// for (int i = 0; i < Ntype; i++)
+    // {
+    //     for (int j = 0; j < Ntype; j++)
+    //     {
+    //         if( i == 3 && j == 0)
+    //             gdrug[i][j] = gdrug0;
+	// 		if( i == 0 && j == 3)
+    //             gdrug[i][j] = 2*gdrug0;
+    //         else
+    //             gdrug[i][j] = 0;
+    //     }
+    // }
+
+
+    // for (int i = 0; i < Ntype; i++)
+    // {
+    //     for (int j = 0; j < Ntype; j++)
+    //     {
+	// 	if(i==0){
+	// 			if( j == 0 || j==3) 
+	// 				gdrug[i][j] = gdrug0;}
+	// 	if(i==3){
+	// 		if(j==0 || j==3) 
+	// 			gdrug[i][j]= gdrug0;}
+    //     }
+    // }
+	for (int i = 0; i < Ntype; i++)
     {
         for (int j = 0; j < Ntype; j++)
         {
-            if( i == 0 && j == 0)
-                gdrug[i][j] = gdrug0;
-            else
-                gdrug[i][j] = 0;
-        }
-    }
-
-
-    for (int i = 0; i < Ntype; i++)
-    {
-        for (int j = 0; j < Ntype; j++)
-        {
-	 if(i==0){
-            if( j == 0)
-                gdrug[i][j] = 1.0*gdrug0;}
-	if(i==3){
-		if(j==3)
-			gdrug[i][j]= 1.0*gdrug0;}
+			if(i==0 && j==0){ //CD-CD
+				gdrug[i][j] = gdrug0-5.88; //LBF added 072125
+			}
+			if(i==3 && j==3){ //DC-DC
+				gdrug[i][j] = gdrug0;
+			}
         }
     }
 
@@ -199,7 +240,6 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	if(theParams.is_key("dg")) dg = std::stod(theParams.get_value("dg"));
 	//Chemical potentials
 	if(theParams.is_key("muCD")) mu[0] = std::stod(theParams.get_value("muCD"));
-	mu[3] = mu[0];
 	if(theParams.is_key("dmu")) dmu = std::stod(theParams.get_value("dmu"));
 	//if(theParams.is_key("muAB")) mu[1] = std::stod(theParams.get_value("muAB"));
 	//Drug chemical potential
@@ -486,6 +526,7 @@ void System::update_neigh()
 
 void System::update_boundary()
 {
+	//This function does not seem to work for the initial diamond configuration
 	Nsurf = 0;
 	NAB = 0;
 	NCD = 0;
@@ -609,8 +650,11 @@ void System::update_boundary()
 	{
 		update_half_edge(it->id);
 
-		if (Nhe == 6) //(Nboundary == 1)
+		/*LBF 072225: This really shouldn't be hard-coded, but I added 
+		  Nhe==8 to detect diamonds*/
+		if (Nhe == 6 || Nhe==10)  //(Nboundary == 1)
 		{
+			//std::cout << "TEST" << std::endl;
 			if (is_boundary(it->id) > 0)
 			{
 				if (it->boundary_index == -1)
@@ -738,13 +782,13 @@ void System::update_boundary()
 	}*/
 
 	//TEMP DOUBLE CHECK
-	/*
-	for (vector<int>::iterator ht = boundary.begin(); ht != boundary.end(); ++ht)
-	{
-		//cout << "on boundary" <<endl;
-		//cout << "id " << *ht << " next id " << he[heidtoindex[*ht]].nextid << " prev id " << he[hei:update_boundary
-		he[heidtoindex[*ht]].previd_boundary=he[heidtoindex[*ht]].previd;
-	}*/
+	
+	// for (vector<int>::iterator ht = boundary.begin(); ht != boundary.end(); ++ht)
+	// {
+	// 	cout << "on boundary" <<endl;
+	// 	cout << "id " << *ht << " next id " << he[heidtoindex[*ht]].nextid_boundary << " prev id " << he[heidtoindex[*ht]].previd_boundary << std::endl;
+	// 	//he[heidtoindex[*ht]].previd_boundary=he[heidtoindex[*ht]].previd;
+	// }
 	update_normals();
 	update_excluder_top();
 	Nsurf = boundary.size();
@@ -1331,6 +1375,7 @@ int System::opposite_edge(int heid0)
 
 void System::set_prev_next(int heid0, int previd0, int nextid0)
 {
+	//Set the adjacent "previous" and "next" ids of half-edge heid0
 	int heindex = heidtoindex[heid0];
 	//cout << "heindex" <<endl;
 	if ((previd0 != -1) && (nextid0 != -1))
@@ -3280,7 +3325,8 @@ double System::find_dg(int type, int typenext, bool drug)
 
 
 
-
+	//std::cout << "type: " << type << " typenext: " << typenext << std::endl;
+	//std::cout << "drug energy: " << gdrug[type][typenext] << std::endl;
 	double bindg = gb[type][typenext] + drug * (gdrug[type][typenext]-mudrug);
 	/*if (((typenext == 0) || (typenext == 3)) && ((type == 0) || (type == 3))) {
 		bindg +=  2*(gdrug-mudrug) * drug;
@@ -4979,8 +5025,18 @@ void make_initial_triangle(System &g)
 		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
 		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
 	}
-
 	g.update_boundary();
+	std:: cout << "AFTER update_boundary:" << std::endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	//exit(1);
 }
 
 void make_initial_pentamer(System &g)
@@ -5054,6 +5110,80 @@ void make_initial_pentamer(System &g)
 	g.update_boundary();
 }
 
+void make_initial_diamond_T4(System &g)
+{
+	//Create vertices
+	double xyz0[3];
+	xyz0[0] = 0;
+	xyz0[1] = 0;
+	xyz0[2] = 0;
+
+	for (int i = 0; i < 3; i++)
+	{
+		g.add_vertex(xyz0);
+		xyz0[0] = cos(i * M_PI / 3);
+		xyz0[1] = sin(i * M_PI / 3);
+		xyz0[2] = 0;
+	}
+	//Last vertex creates a diamond
+	xyz0[0] = 0;
+	xyz0[1] = 2*sin(M_PI/3);
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+	//Here, the first two arguments are the vertex indices
+	//The third argument is the dimer type (0=CD,1=BA,2=AB,3=DC)
+	//The last argument says whether this half edge is on the boundary or not
+	//First AB
+	g.add_half_edge_type(g.v[0].vid, g.v[1].vid, 2, -1); 
+	g.add_half_edge_type(g.v[1].vid, g.v[0].vid, 1, 0); //boundary
+	//Middle CD
+	g.add_half_edge_type(g.v[1].vid, g.v[2].vid, 0, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[1].vid, 3, -1);
+	//Second AB
+	g.add_half_edge_type(g.v[2].vid, g.v[0].vid, 1, -1);
+	g.add_half_edge_type(g.v[0].vid, g.v[2].vid, 2, 0); //boundary
+	//Second CD
+	g.add_half_edge_type(g.v[1].vid, g.v[3].vid, 3, -1);
+	g.add_half_edge_type(g.v[3].vid, g.v[1].vid, 0, 0); //boundary
+	//Third CD
+	g.add_half_edge_type(g.v[3].vid, g.v[2].vid, 3, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[3].vid, 0, 0); //boundary
+
+	//Set indices determining half edge connectivity
+	g.set_prev_next(g.he[0].id, g.he[4].id, g.he[2].id); //BA-AB-CD
+	g.set_prev_next(g.he[2].id, g.he[0].id, g.he[4].id); //AB-CD-BA
+	g.set_prev_next(g.he[4].id, g.he[2].id, g.he[0].id); //CD-BA-AB
+	g.set_prev_next(g.he[6].id, g.he[3].id, g.he[8].id); //CD-CD-CD
+	g.set_prev_next(g.he[8].id, g.he[6].id, g.he[3].id); //CD-CD-CD
+	g.set_prev_next(g.he[3].id, g.he[8].id, g.he[6].id); //CD-CD-CD
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	g.update_boundary();
+	std:: cout << "AFTER update_boundary:" << std::endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	//exit(1);
+}
+
+void make_initial_diamond_CD(System &g)
+{}
+
 int check_bind_triangle(System &g) //
 {
 	//cout << "in attempt_bind_triangle heid0 " << heid0 << endl;
@@ -5064,14 +5194,17 @@ int check_bind_triangle(System &g) //
 		/* if triangle */
 		//int bi=g.he[heindex0].boundary_index;
 
-		//cout << "in attempt_bind_triangle heindex0 " << heindex0 <<  " boundary_index " <<bi << endl;
+		//cout << "in attempt_bind_triangle heindex0 " << heindex0 << endl;
 
 		int nextboundaryid0 = g.he[heindex0].nextid_boundary;
 		int prevboundaryid0 = g.he[heindex0].previd_boundary;
 
+		//std::cout << "nextid: " << nextboundaryid0 << " previd: " << prevboundaryid0 << std::endl;
+
 		if (nextboundaryid0 == -1 || prevboundaryid0 == -1)
 		{
 			cout << "error in attempt_bind_triangle heindex0 " << endl;
+			
 			exit(-1);
 		}
 

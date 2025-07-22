@@ -28,6 +28,7 @@ public:
     int seed;
 
     std::string simulation = "standard";
+    std::string initial_config = "triangle";
     int equil_steps = 0;
     int production_steps = 0;
     int info_freq = 1;

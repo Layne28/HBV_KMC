@@ -4,7 +4,8 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
 {
 
     if(theParams.is_key("ks0")) ks0 = std::stod(theParams.get_value("ks0"));
-    if(theParams.is_key("kd0")) ks0 = std::stod(theParams.get_value("kd0"));
+    if(theParams.is_key("kd0")) kd0 = std::stod(theParams.get_value("kd0"));
+    if(theParams.is_key("do_vertex_only")) do_vertex_only = std::stod(theParams.get_value("do_vertex_only"));
 
     //***Set RNG***
     rg = the_rg;
@@ -261,6 +262,8 @@ void MC::sweep(System &g)
     /*** Vertex relaxation ***/
     move_vertices(g);
 
+    if (do_vertex_only==1) return;
+
     /*** Conformational change ***/
     if (g.Nhe==6){
         int ind = gsl_rng_uniform_int(rg, g.boundary.size());
@@ -298,11 +301,11 @@ void MC::sweep(System &g)
             //std::cout << ssadd << std::endl;
             if (ssadd > 1){
                 dimeradded++;
-                std::cout << "Dimer added" << std::endl;
+                //std::cout << "Dimer added" << std::endl;
             }
             else if (ssadd > 0){
                 monomeradded++;
-                std::cout << "Monomer added" << std::endl;
+                //std::cout << "Monomer added" << std::endl;
             }
             ssadd = -1;
             g.update_boundary();
@@ -390,22 +393,25 @@ void MC::sweep(System &g)
             {
                 /*** Bind wedge ***/
                 //if (gsl_rng_uniform(r) < pb_attempt){
-                int ind = gsl_rng_uniform_int(rg, g.boundary.size());
-                int hh = g.boundary[ind];
-                int tt = -1;
-                if (g.no_bond_boundary(hh) > 0)
-                {
-                    tt = attempt_bind_wedge_dimer(g, hh);
-                    if (tt > 0)
-                        binding++;
-                    tt = -1;
+                if(g.boundary.size()>0) {
+
+                    int ind = gsl_rng_uniform_int(rg, g.boundary.size());
+                    int hh = g.boundary[ind];
+                    int tt = -1;
+                    if (g.no_bond_boundary(hh) > 0)
+                    {
+                        tt = attempt_bind_wedge_dimer(g, hh);
+                        if (tt > 0)
+                            binding++;
+                        tt = -1;
+                    }
+                    g.update_boundary();
                 }
-                g.update_boundary();
 
                 /*** Unind wedge ***/
                 if (g.boundaryvbond.size() > 0) // &&  gsl_rng_uniform(r) < pb_attempt)
                 {
-                    ind = gsl_rng_uniform_int(rg, g.boundary.size());
+                    int ind = gsl_rng_uniform_int(rg, g.boundary.size());
                     int hh = g.boundary[ind];
                     if ((g.is_bond_in_boundary(hh) > 0) || (g.is_bond_out_boundary(hh) > 0))
                     {
@@ -1770,7 +1776,7 @@ int MC::attempt_add_monomer_dimer_drug(System &g, int heid0) //!!! Should update
 
         if (gsl_rng_uniform(rg) < crit && overlapflag == -1) //dimer added
         {
-            std::cout << "Added drug-bound dimer" << endl;
+            //std::cout << "Added drug-bound dimer" << endl;
             // ToDo
             // update boundary index
             // update next_previous boundary
@@ -5242,6 +5248,7 @@ int MC::attempt_add_drug(System &g, int heid0)
     //{
     //  e2 += (g.gdrug-g.mudrug);
     //}
+    //std::cout << "Energy to add drug is " << e2 - e1 << " and should be -4.9" << endl;
     double crit = exp((-(e2 - e1)) / g.T);
     if (gsl_rng_uniform(rg) < crit)
     {
@@ -5313,6 +5320,7 @@ int MC::attempt_remove_drug(System &g, int heid0)
     e2 += g.find_dg(g.he[previndex0].type, hetype, 0);
     //std::cout<< "g.dimer_bend_energy(previndex0); " << g.dimer_bend_energy(previndex0)<<endl;
     //}
+    //std::cout << "Energy to remove drug is " << e2 - e1 << " and should be 4.9" << endl;
     double crit = exp((-(e2 - e1)) / g.T);
     //std::cout << " de removal drug is " <<e2-e1<<endl;
     //std::cout << " 011 g.Nd is " <<g.Nd<<endl;

@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./drug
+output_dir: ./diamond
 config_freq: 10000
 thermo_freq: 1000
 print_freq: 10000

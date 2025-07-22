@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./drug
+output_dir: ./triangle
 config_freq: 10000
 thermo_freq: 1000
 print_freq: 10000
@@ -9,12 +9,12 @@ equil_steps: 1000
 production_steps: 10000000
 info_freq: 10000
 simulation: standard
+initial_config: triangle
+do_vertex_only: 1
 
 #Monte Carlo parameters
 ks0: 0.002
 kd0: 0.002
-#ks0: 0.0
-#kd0: 10.0
 
 ###########################
 #System/Geometry parameters

@@ -22,6 +22,10 @@ struct HE
 	int vout; //end vertex id
 	int id;	  // id of halfedge
 	int type; //type of halfedge
+	//type 0: CD
+	//type 1: BA
+	//type 2: AB
+	//type 3: DC
 
 	int nextid; // id of next halfedge
 	int previd; // id of previous halfedge
@@ -292,6 +296,8 @@ void dump_data_frame(System &g, FILE *f, int time);
 void recenter(System &g);
 int surfclosev(System &g);
 void make_initial_triangle(System &g);
+void make_initial_diamond_T4(System &g);
+void make_initial_diamond_CD(System &g);
 void make_initial_pentamer(System &g);
 int check_bind_triangle(System &g);
 void dump_analysis(System &g, FILE *ofile, int sweep, int seed, int seconds);
