@@ -31,6 +31,7 @@ public:
     int particles_freq=10;
     int thermo_freq=10;
     int freq_log=10;
+    int freq_restart=10000;
     int print_freq=1000; //how often to print to console
     //int do_h5md=1;
 
@@ -55,7 +56,7 @@ public:
     void dump_restart_lammps_data_file(System &g, int time0);
     void dump_data_frame(System &g, FILE *f, int time);
     void dump_analysis(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1);
-
+    void dump_angle_bonds(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1);
 };
 
 

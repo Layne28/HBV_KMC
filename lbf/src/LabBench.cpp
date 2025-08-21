@@ -60,9 +60,10 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     obs.dump_parameters(sys, subdir);
 
     // set up an output file
-    FILE *ofile, *finalfile, *fi, *paramfile;
+    FILE *ofile, *finalfile, *fi, *paramfile, *anglefile;
 
     ofile = fopen((obs.output_dir + "/" + subdir + "/energy.dat").c_str(), "a");
+    anglefile = fopen((obs.output_dir + "/" + subdir + "/angle_bonds.dat").c_str(), "a");
 
     // if (obs.do_h5md==1) {
     //     obs.open_h5md(sys, subdir);
@@ -95,10 +96,17 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             seconds = difftime(timer2, timer1);
 
             dump_analysis(sys, ofile, i, seed, seconds);
+            dump_angle_bonds(sys, anglefile, i, seed, seconds);
+            if(solver.do_vertex_only == 0) {
+                dump_angle_bonds(sys, anglefile, i, seed, seconds);
+            }
             dump_lammps_data_file(sys, 22222222);
             //dump_lammps_traj_restart(g, sweep);
             dump_lammps_data_dimers(sys, 11111111);
 
+        }
+        if (i % (obs.freq_restart) == 0 ) 
+        {
             dump_restart_lammps_data_file(sys, i);
         }
 
@@ -259,8 +267,11 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
         //Dump configuration
         //dump_lammps_traj_dimers(sys, i);
         //dump_restart_lammps_data_file(sys, i);
+
+        /***************************** */
         //Advance dynamics
         solver.sweep(sys);
+        /***************************** */
     }
 
     dump_lammps_traj_dimers(sys, frame++);
@@ -346,10 +357,19 @@ void LabBench::run_standard_simulation()
         make_initial_diamond_T4(sys);
     }
     else if(initial_config=="diamond_CD"){
+        //std::cout << "TEST" << std::endl;
         make_initial_diamond_CD(sys);
     }
     else if(initial_config=="pentamer"){
         make_initial_pentamer(sys);
+    }
+    else if(ends_with(initial_config,".dat")){
+        std::cout << "Attempting to read data from " << initial_config << std::endl;
+        read_restart_lammps_data_file(sys, initial_config.data());
+        //  FILE *f;
+        //  f = fopen(initial_config.data(), "r");
+        //  read_restart_lammps_data_traj(sys, f, -1);
+        //make_initial_from_file(sys, initial_config);
     }
     else{
         std::cout << "Error: initial configuration type not recognized." << std::endl;

@@ -9,6 +9,7 @@ equil_steps: 1000
 production_steps: 1000000
 info_freq: 10000
 simulation: standard
+do_vertex_only: 0
 
 #Monte Carlo parameters
 ks0: 0.002

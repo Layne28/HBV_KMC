@@ -16,6 +16,7 @@
 #include "MC.hpp"
 #include "Observer.hpp"
 #include "ParamDict.hpp"
+#include "IO.hpp"
 
 class LabBench
 {

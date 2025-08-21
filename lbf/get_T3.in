@@ -1,16 +1,15 @@
 #Observer
-output_dir: ./diamond_T4
-config_freq: 1000
+output_dir: ./T3
+config_freq: 10000
 thermo_freq: 1000
-print_freq: 1000
+print_freq: 10000
 
 #Run info
-equil_steps: 10000
-production_steps: 1000000
-info_freq: 1000
+equil_steps: 1000
+production_steps: 10000000
+info_freq: 10000
 simulation: standard
-initial_config: diamond_T4
-do_vertex_only: 1
+do_vertex_only: 0
 
 #Monte Carlo parameters
 ks0: 0.002
@@ -32,28 +31,25 @@ theta0: 0.240
 theta1: 0.480
 
 #Dimer-dimer binding affinities
-gb0: -9.8
-#gb0: 10.0
+gb0: -9.85
 dg12: 0.3
 dg01: 0.1
 dg20: -0.1
 dg33: 0.0
-#dg00: 0.0
 dg00: -0.6
 dgother: -0.95
 
 #Chemical potentials
 #muCD is ln(10muM)
 muCD: -11.5
-#dmu controls the conformational
-#free energy difference between AB and CD
-dmu: -4.5
+dmu: -3.5
 
 #Drug parameters
 #mudrug is ln(40muM)
-mudrug: -10.1
+#mudrug: -10.1
+mudrug: -1000.0
 #Drug-dimer binding affinity made up for now
-gdrug0: -17.0
+gdrug0: -6.0
 
 
   

@@ -6,6 +6,9 @@ Observer::Observer(ParamDict &theParams)
     if(theParams.is_key("config_freq")) particles_freq = std::stoi(theParams.get_value("config_freq"));
     if(theParams.is_key("thermo_freq")) thermo_freq = std::stoi(theParams.get_value("thermo_freq"));
 	if(theParams.is_key("print_freq")) print_freq = std::stoi(theParams.get_value("print_freq"));
+	if(theParams.is_key("restart_freq")) freq_restart = std::stoi(theParams.get_value("restart_freq"));
+
+	freq_log = particles_freq;
 
     fs::create_directories(output_dir);
 }
@@ -688,12 +691,17 @@ void dump_restart_lammps_data_file(System &g, int time0)
 { //currently no drug
 	char filename[80];
 	float box = 3.0;
-	sprintf(filename, "restart_lammps.dat");
+	//sprintf(filename, "restart_lammps.dat");
+	std::ostringstream oss;
+	oss << "restart_lammps_" << time0 << ".dat";
+	std::string var = oss.str();
+	sprintf(filename, (g.get_obs().output_dir + var).c_str());
 	FILE *f;
 	f = fopen(filename, "w");
 
 	fprintf(f, "HEVA-LAMMPSDescription-Generated  time_step= %d\n", time0);
 	fprintf(f, "\n%d atoms", g.Nv);
+	//fprintf(f, "\n%d atoms", g.Nhe + g.Nhe + g.Nd + 8);
 	fprintf(f, "\n%d bonds", g.Nhe);
 	fprintf(f, "\n%d angles", g.Nhe);				  //next _ prev
 	fprintf(f, "\n0 dihedrals");
@@ -898,6 +906,105 @@ void dump_analysis(System &g, FILE *ofile, int sweep = -1, int seed = -1, int se
 			                    //Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 		NVin,	Nhein,NCD_T4,	NCD_T3,		Nv,		NE,		Nsurf, 	Nboundary\n");
 	fflush(ofile);
 }
+
+void dump_angle_bonds(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1)
+{
+
+	//Get bond lengths, binding angles, and dihedral angles
+	double *lengths = new double[g.he.size()];
+	double *angles = new double[g.he.size()];
+	double *dihedrals = new double[g.he.size()];
+
+	int nbonds = 0;
+	for(vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		//Get bond length
+		double bond_length = it->l;
+		lengths[nbonds] = bond_length;
+		//std::cout << "Bond length for edge " << it->id << ": " << bond_length << std::endl;
+		//it->update_geometry_parameters(g);
+
+		//Get binding angles
+		int nextindex = g.heidtoindex[it->nextid];
+		int opindex = g.heidtoindex[it->opid];
+		g.update_half_edge(g.he[opindex].id);
+		g.update_half_edge(g.he[nextindex].id);
+		double ndot = (dot(g.he[opindex].hevec, g.he[nextindex].hevec) / (g.he[opindex].l * g.he[nextindex].l));
+		if (ndot > 1) ndot = 1;
+		double phi = acos(ndot);
+		angles[nbonds] = phi;
+		//std::cout << "Binding angle for edge " << it->id << ": " << phi << std::endl;
+
+		//Get dihedral angles
+		int opindex0 = g.heidtoindex[it->opid];
+		g.get_normal(it->id);
+		g.get_normal(it->opid);
+		int previndex0 = -1;
+		int nextindex0 = -1;
+		int nexttype = -1;
+		int prevtype = -1;
+		int etype = it->type;
+		int vid0 = -1;
+		int opvid0 = -1;
+		if (it->nextid != -1)
+		{
+			nextindex0 = g.heidtoindex[it->nextid];
+			nexttype = g.he[nextindex0].type;
+			vid0 = g.he[nextindex0].vout;
+		}
+
+		if (it->previd != -1)
+		{
+			previndex0 = g.heidtoindex[it->previd];
+			prevtype = g.he[previndex0].type;
+			vid0 = g.he[previndex0].vin;
+		}
+
+		int opnextindex0 = -1;
+		int opprevindex0 = -1;
+		int opnexttype = -1;
+		int opprevtype = -1;
+		int opetype = it->type;
+
+		if (it->nextid != -1)
+		{
+			opnextindex0 = g.heidtoindex[it->nextid];
+			opnexttype = g.he[opnextindex0].type;
+			opvid0 = g.he[opnextindex0].vout;
+		}
+		if (g.he[opindex0].previd != -1)
+		{
+			opprevindex0 = g.heidtoindex[it->previd];
+			opprevtype = g.he[opprevindex0].type;
+			opvid0 = g.he[opprevindex0].vin;
+		}
+		ndot = dot(g.he[opindex].n, g.he[nextindex].n);
+		double theta;
+		if (ndot >= 1) theta = 0;
+		else theta = acos(ndot);
+		dihedrals[nbonds] = theta;
+		//std::cout << "Dihedral angle for edge " << it->id << ": " << theta << std::endl;
+		nbonds++;
+	}
+
+
+	if (sweep == 0)
+		fprintf(ofile, "sweep,seed,seconds,l1,l2,l3,l4,l5,l6,l7,l8,l9,l10,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,d1,d2,d3,d4,d5,d6,d7,d8,d9,d10\n");
+	fprintf(ofile, "%d,%d,%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+			sweep, seed, seconds,
+			lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9],
+			angles[0], angles[1], angles[2], angles[3], angles[4], angles[5], angles[6], angles[7], angles[8], angles[9],
+			dihedrals[0], dihedrals[1], dihedrals[2], dihedrals[3], dihedrals[4], dihedrals[5], dihedrals[6], dihedrals[7], dihedrals[8], dihedrals[9]);
+																			
+	// g.update_geometry_parameters();
+
+	// fprintf(ofile, "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+	// 		sweep, seed, seconds, g.epsilon[0], g.kappa[0], g.kappaPhi[0], g.theta0[0], g.theta0[1], g.gb0, g.mu[0], g.mu[1] - g.mu[0], g.dg, g.theta0[2],
+	// 		g.compute_energy(),g.compute_bind_energy(), g.Nv5, g.Nv6, g.NAB, g.NAB_in,  g.NCD_Hex, g.NCD_other, g.Nv_in,g.Nhe_in,g.NCD_T4_in, g.NCD_T3_in,g.NCD_T4, g.NCD_T3,  g.Nv, g.Nhe / 2,g.Nsurf, g.Nboundary);
+
+	fflush(ofile);
+}
+
 
 
 

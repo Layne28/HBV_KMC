@@ -1,5 +1,7 @@
 #include "System.hpp"
-using namespace std;
+#include <algorithm>
+#include <cctype>
+//using namespace std;
 
 System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 
@@ -4659,12 +4661,13 @@ int read_restart_lammps_data_file(System &g, char filename[])
 		x = fscanf(file, "\n%d %*s", &fNv);			 //atoms
 		x = fscanf(file, "\n%d %*s", &fNhe);		 //bonds
 		x = fscanf(file, "\n%*s %*s");				 //angles next_ prev
+		x = fscanf(file, "\n%*s %*s");				 //dihedrals
 		x = fscanf(file, "\n%d %*s", &boundarysize); //impropers prev_boundary this next_boundary
 		x = fscanf(file, "\n");
-		x = fscanf(file, "\n%*s %*s %*s"); //vertex
-		x = fscanf(file, "\n%*s %*s %*s");
-		x = fscanf(file, "\n%*s %*s %*s");
-		x = fscanf(file, "\n%*s %*s %*s"); //impropers
+		x = fscanf(file, "\n%*s %*s %*s"); //vertex types
+		x = fscanf(file, "\n%*s %*s %*s"); //bond types
+		x = fscanf(file, "\n%*s %*s %*s"); //angle types
+		x = fscanf(file, "\n%*s %*s %*s"); //improper types
 		x = fscanf(file, "\n");
 		x = fscanf(file, "\n%*s %*s %*s %*s");
 		x = fscanf(file, "\n%*s %*s %*s %*s");
@@ -4673,18 +4676,22 @@ int read_restart_lammps_data_file(System &g, char filename[])
 		x = fscanf(file, "\n%*s");
 		x = fscanf(file, "\n");
 
+		std::cout << "Num vertices: " << fNv << std::endl;
+
 		double *vec = new double[3];
 		for (int i = 0; i < fNv; i++)
 		{
 
-			x = fscanf(file, "%*s %*s %s %s %s\n", temp0, temp1, temp2);
+			x = fscanf(file, "%*d %*d %*d %*d %s %s %s\n", temp0, temp1, temp2);
 
 			vec[0] = atof(temp0);
 			vec[1] = atof(temp1);
 			vec[2] = atof(temp2);
-			//fprintf(stderr,"%s %s %s %s %s\n" ,index,vtype ,temp0,temp1,temp2);
+			fprintf(stderr,"%s %s %s\n", temp0,temp1,temp2);
+			std::cout << "x y z readin: " << temp0 << " " << temp1 << " " << temp2 << std::endl;
 			g.add_vertex(vec);
-			//fprintf(stderr, "%d  %f %f %f \n",i, g.v[i][0],g.v[i][1],g.v[i][2]);
+			//fprintf(stderr, "%d  %f %f %f \n",i, g.v[i].co[0],g.v[i].co[1],g.v[i].co[2]);
+			std::cout << "x y z vertex: " << g.v[i].co[0] << " " << g.v[i].co[1] << " " << g.v[i].co[2] << std::endl;
 		}
 		delete[] vec;
 		//fprintf(stdout, "read all Vertices\n graph has %d vertices", g.Nv);
@@ -4752,6 +4759,7 @@ int read_restart_lammps_data_file(System &g, char filename[])
 	}
 	else
 	{
+		std::cout << "Warning: could not read initial data file. Making triangle instead." << std::endl;
 		make_initial_triangle(g);
 
 	}
@@ -4783,14 +4791,17 @@ int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step = -1)
 		;
 		while (fscanf(trajfile, "%*s %*s %s\n", temp0) == 1)
 		{
+			std::cout << "test " << temp0 << std::endl;
 			int x = 0;
 			int fNv = -1;
 			int fNhe = -1;
 			int boundarysize = -1;
 			step = atoi(temp0); //timestep -- sweep
 			cout << "step " << step << endl;
+			//x = fscanf(trajfile, "\n%*s", temp0);					 //atoms
+			std::cout << temp0 << std::endl;
 			x = fscanf(trajfile, "\n%*s");					 //atoms
-			if (x==0) break;
+			//if (x==0) break;
 
 			x = fscanf(trajfile, "\n%*s");					 //bonds
 			x = fscanf(trajfile, "\n%d %*s", &fNv);			 //atoms
@@ -5182,7 +5193,104 @@ void make_initial_diamond_T4(System &g)
 }
 
 void make_initial_diamond_CD(System &g)
-{}
+{
+	//Create vertices
+	double xyz0[3];
+	xyz0[0] = 0;
+	xyz0[1] = 0;
+	xyz0[2] = 0;
+
+	for (int i = 0; i < 3; i++)
+	{
+		g.add_vertex(xyz0);
+		xyz0[0] = cos(i * M_PI / 3);
+		xyz0[1] = sin(i * M_PI / 3);
+		xyz0[2] = 0;
+	}
+	//Last vertex creates a diamond
+	xyz0[0] = 0;
+	xyz0[1] = 2*sin(M_PI/3);
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+	//Here, the first two arguments are the vertex indices
+	//The third argument is the dimer type (0=CD,1=BA,2=AB,3=DC)
+	//The last argument says whether this half edge is on the boundary or not
+	//First AB
+	g.add_half_edge_type(g.v[0].vid, g.v[1].vid, 0, -1); 
+	g.add_half_edge_type(g.v[1].vid, g.v[0].vid, 3, 0); //boundary
+	//Middle CD
+	g.add_half_edge_type(g.v[1].vid, g.v[2].vid, 0, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[1].vid, 3, -1);
+	//Second AB
+	g.add_half_edge_type(g.v[2].vid, g.v[0].vid, 0, -1);
+	g.add_half_edge_type(g.v[0].vid, g.v[2].vid, 3, 0); //boundary
+	//Second CD
+	g.add_half_edge_type(g.v[1].vid, g.v[3].vid, 3, -1);
+	g.add_half_edge_type(g.v[3].vid, g.v[1].vid, 0, 0); //boundary
+	//Third CD
+	g.add_half_edge_type(g.v[3].vid, g.v[2].vid, 3, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[3].vid, 0, 0); //boundary
+
+	//Set indices determining half edge connectivity
+	g.set_prev_next(g.he[0].id, g.he[4].id, g.he[2].id); //CD-CD-CD
+	g.set_prev_next(g.he[2].id, g.he[0].id, g.he[4].id); //CD-CD-CD
+	g.set_prev_next(g.he[4].id, g.he[2].id, g.he[0].id); //CD-BA-AB
+	g.set_prev_next(g.he[6].id, g.he[3].id, g.he[8].id); //CD-CD-CD
+	g.set_prev_next(g.he[8].id, g.he[6].id, g.he[3].id); //CD-CD-CD
+	g.set_prev_next(g.he[3].id, g.he[8].id, g.he[6].id); //CD-CD-CD
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	g.update_boundary();
+	std:: cout << "AFTER update_boundary:" << std::endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	//exit(1);	
+}
+
+void make_initial_from_file(System &g, std::string filename)
+{
+	std::ifstream file(filename);
+	file.exceptions(std::ifstream::failbit);
+	try
+	{
+		//Read line-by-line
+		std::string line;
+		int cnt = 0;
+
+		//Skip headers
+		std::getline(file,line);
+		std::getline(file,line);
+
+		//Get number of atoms
+		int fNv = 0;
+		while(std::getline(file,line))
+		{
+			line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end()); //remove whitespace
+			cnt++;
+		}
+	}
+	catch (std::ifstream::failure &e)
+    {
+        if (!file.eof()) std::cerr << "Exception opening/reading/closing in file\n";
+    }
+
+}
 
 int check_bind_triangle(System &g) //
 {

@@ -5,6 +5,9 @@
 
 #include <vector>
 #include <iostream>
+#include <fstream>
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include "ParamDict.hpp"
@@ -299,7 +302,9 @@ void make_initial_triangle(System &g);
 void make_initial_diamond_T4(System &g);
 void make_initial_diamond_CD(System &g);
 void make_initial_pentamer(System &g);
+void make_initial_from_file(System &g, std::string filename);
 int check_bind_triangle(System &g);
 void dump_analysis(System &g, FILE *ofile, int sweep, int seed, int seconds);
+void dump_angle_bonds(System &g, FILE *ofile, int sweep, int seed, int seconds);
 
 #endif

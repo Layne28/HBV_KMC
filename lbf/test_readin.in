@@ -1,16 +1,18 @@
 #Observer
-output_dir: ./diamond_T4
+output_dir: ./aa_dihedral_test_readin
 config_freq: 1000
 thermo_freq: 1000
 print_freq: 1000
+restart_freq: 100000
 
 #Run info
-equil_steps: 10000
+equil_steps: 0
+#production_steps: 50000000
 production_steps: 1000000
 info_freq: 1000
 simulation: standard
-initial_config: diamond_T4
-do_vertex_only: 1
+initial_config: T4/seed=2/restart_lammps_4000000.dat
+do_vertex_only: 0
 
 #Monte Carlo parameters
 ks0: 0.002
@@ -28,23 +30,32 @@ kappa0: 40
 kappaPhi0: 800
 
 #Dihedral angles
-theta0: 0.240
-theta1: 0.480
+theta0: 0.710
+theta1: 0.554
+#theta0: 0.240
+#theta1: 0.480
 
 #Dimer-dimer binding affinities
 gb0: -9.8
-#gb0: 10.0
+#A-A
 dg12: 0.3
+#B-C
 dg01: 0.1
+#D-B
 dg20: -0.1
+#C-D
 dg33: 0.0
 #dg00: 0.0
+#D-C
 dg00: -0.6
+#Everything else
 dgother: -0.95
 
 #Chemical potentials
 #muCD is ln(10muM)
 muCD: -11.5
+#muCD: -10.8
+#muCD: -6.91
 #dmu controls the conformational
 #free energy difference between AB and CD
 dmu: -4.5
@@ -52,6 +63,7 @@ dmu: -4.5
 #Drug parameters
 #mudrug is ln(40muM)
 mudrug: -10.1
+#mudrug: -1000.0
 #Drug-dimer binding affinity made up for now
 gdrug0: -17.0
 

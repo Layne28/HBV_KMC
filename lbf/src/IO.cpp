@@ -3,6 +3,11 @@
 using namespace std;
 namespace fs = experimental::filesystem;
 
+bool ends_with(std::string_view str, std::string_view suffix)
+{
+    return str.size() >= suffix.size() && str.compare(str.size()-suffix.size(), suffix.size(), suffix) == 0;
+}
+
 void determine_seed(long unsigned int &seed, std::string seed_file, ParamDict &myParams)
 {
     myParams.add_entry("output_dir", myParams.get_value("output_dir") + "/seed=" + std::to_string(seed));

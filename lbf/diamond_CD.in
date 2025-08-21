@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./diamond_T4
+output_dir: ./diamond_CD
 config_freq: 1000
 thermo_freq: 1000
 print_freq: 1000
@@ -9,7 +9,7 @@ equil_steps: 10000
 production_steps: 1000000
 info_freq: 1000
 simulation: standard
-initial_config: diamond_T4
+initial_config: diamond_CD
 do_vertex_only: 1
 
 #Monte Carlo parameters
