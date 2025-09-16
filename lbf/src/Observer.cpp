@@ -356,7 +356,7 @@ void dump_lammps_data_file(System &g, int time0)
 	fclose(f);
 }
 
-void dump_lammps_traj_dimers(System &g, int time0)
+void Observer::dump_lammps_traj_dimers(System &g, int time0)
 {
 
 	//char filename[80];
@@ -529,6 +529,124 @@ void dump_lammps_traj_dimers(System &g, int time0)
 		fprintf(f, "\n%d %d %d %d", index + 1, btype, index + 1, g.Nhe + index + 1);
 	}
 	//cout <<"in dump   here 777"<<endl;
+	fprintf(f, "\n");
+	fclose(f);
+}
+
+void Observer::dump_lammps_traj_angles(System &g, int time0)
+{
+
+	//char filename[80];
+	float box = 3.0;
+	
+	//sprintf(filename, "trajlammps.dat");
+	FILE *f;
+	f = fopen((g.get_obs().output_dir + "trajlammps_angles.dat").c_str(), "a");
+	//fprintf(f,"@<TRIPOS>MOLECULE\n");
+
+	fprintf(f, "Bond lengths, bond angles, and dihedrals at time_step=%d\n", time0);
+	// fprintf(f, "\n%d bonds", g.Nhe/5);
+	// fprintf(f, "\n%d angles");
+	// fprintf(f, "\n%d dihedrals");
+	//vin of each half edge
+	int counter = 1;
+
+	//Bonds
+	fprintf(f, "\nBonds (#, type, bond len, eq len)");
+	fprintf(f, "\n");
+
+	int cnt = 0;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		if (it->vin == -1 || it->vout == -1 || g.vidtoindex[it->vin] == -1 || g.vidtoindex[it->vout] == -1)
+		{
+			cout << " dump_data ! error in vin vout of edge " << it->id << endl;
+			exit(-1);
+		}
+		int btype = it->type;
+		//Only print even entries
+		int temp = distance(g.he.begin(), it);
+		if (temp % 2 == 0)
+		{	//Print counter, bond type, bond length, eq. bond length
+			//fprintf(f, "\n%li %d %d %d %.03f %0.3f", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin], g.vidtoindex[it->vout], it->l, g.l0[btype]);
+			fprintf(f, "\n%li %d %.03f %0.3f", cnt, btype, it->l, g.l0[btype]);
+			cnt++;
+		}
+	}
+
+	//Angles
+	fprintf(f, "\n");
+	fprintf(f, "\nAngles (#, type, angle, eq angle)"); // this is he - next -prev
+	fprintf(f, "\n");
+	cnt = 0;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+
+		int atype = 1;
+		int henext = -1;
+		int heprev = -1;
+		if (it->nextid != -1)
+		{
+			henext = g.heidtoindex[it->nextid];
+		}
+		if (it->previd != -1)
+		{
+			heprev = g.heidtoindex[it->previd];
+		}
+
+		if ((it->nextid != -1) && (it->previd != -1))
+		{
+			atype = g.get_angle_type(it->type, g.he[it->nextid].type);
+
+			//compute angle
+			int opindex = g.heidtoindex[it->opid];
+			//cout << "opindex: " << opindex<<endl;
+			double ndot = (dot(g.he[opindex].hevec, g.he[henext].hevec) / (g.he[opindex].l * g.he[henext].l));
+			//cout << "ndot "<<ndot<<endl;
+			//if (ndot<-.9) { cout <<" not accepted triangle edge he[opindex].hevec "<<he[opindex].hevec[0] <<endl; exit(-1);}
+			if (ndot > 1) ndot = 1;
+			double angle = acos(ndot);
+
+			//fprintf(f, "\n%li %d %d %d %d %.03f %.03f", distance(g.he.begin(), it) + 1, atype, g.heidtoindex[it->id], henext + 1, heprev + 1, angle, g.phi0[atype]);
+			fprintf(f, "\n%li %d %.03f %.03f", cnt, atype, angle, g.phi0[atype]);
+			cnt++;
+		}
+	}
+
+	fprintf(f, "\n");
+	fprintf(f, "\nDihedrals (#, type, dihedral, eq dihedral)"); // this is he - prev_boundary this next_boundary
+	fprintf(f, "\n");
+	cnt = 0;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+	{
+		int temp = distance(g.he.begin(), it);
+		int heindex0 = g.heidtoindex[it->id];
+		int opindex0 = g.heidtoindex[g.he[heindex0].opid];
+		if (g.he[heindex0].nextid != -1 && g.he[heindex0].previd != -1 && g.he[opindex0].nextid != -1 && g.he[opindex0].previd != -1 && (temp % 2 == 0))
+		{
+			int nextindex0 = g.heidtoindex[g.he[heindex0].nextid];
+			int previndex0 = g.heidtoindex[g.he[heindex0].previd];
+			int opnextindex0 = g.heidtoindex[g.he[opindex0].nextid];
+			int opprevindex0 = g.heidtoindex[g.he[opindex0].previd];
+
+			std::cout << nextindex0 << " " << previndex0 << " " << opnextindex0 << " " << opprevindex0 << std::endl;
+			//Equilibrium dihedral type
+			int dtype = g.get_dihedral_type(g.he[heindex0].type, g.he[nextindex0].type, g.he[previndex0].type, g.he[opindex0].type, g.he[opnextindex0].type, g.he[opprevindex0].type) + 1; 
+
+			//Compute dihedral angle
+			g.get_normal(g.he[heindex0].id);
+			g.get_normal(g.he[heindex0].opid);
+			double ndot = dot(g.he[opindex0].n, g.he[heindex0].n);
+			double theta; //TODO: swap convention, everywhere
+			if (ndot >= 1) theta = 0;
+			else theta = acos(ndot);
+
+			fprintf(f, "\n%li %d %.03f %0.3f", cnt, dtype, theta, g.theta0[dtype]);
+			cnt++;
+		}
+	}
+	fprintf(f, "\n");
 	fprintf(f, "\n");
 	fclose(f);
 }

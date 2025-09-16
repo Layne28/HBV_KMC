@@ -265,6 +265,9 @@ public:
 	void check_odd_neigh();
 	void set_prev_next_boundary(int previd0, int nextid0);
 
+	int get_angle_type(int etype, int nexttype);
+	int get_dihedral_type(int etype, int nexttype, int prevtype, int opetype, int opnexttype, int opprevtype);
+
     //Get (some of these could be made static)
     Observer get_obs();
 
@@ -299,8 +302,9 @@ void dump_data_frame(System &g, FILE *f, int time);
 void recenter(System &g);
 int surfclosev(System &g);
 void make_initial_triangle(System &g);
-void make_initial_diamond_T4(System &g);
+void make_initial_diamond_AB(System &g);
 void make_initial_diamond_CD(System &g);
+void make_initial_diamond_DC(System &g);
 void make_initial_pentamer(System &g);
 void make_initial_from_file(System &g, std::string filename);
 int check_bind_triangle(System &g);

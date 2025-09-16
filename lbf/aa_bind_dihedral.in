@@ -1,17 +1,16 @@
 #Observer
-output_dir: ./T4_test_readin
-config_freq: 1000
-thermo_freq: 1000
+output_dir: ./aa_bind_dihedral
+config_freq: 10000
+thermo_freq: 10000
 print_freq: 1000
-restart_freq: 100000
 
 #Run info
-equil_steps: 0
-#production_steps: 50000000
-production_steps: 1000000
+equil_steps: 10000
+production_steps: 50000000
 info_freq: 1000
 simulation: standard
-initial_config: T4/seed=2/restart_lammps_4000000.dat
+#initial_config: triangle
+initial_config: diamond_T4
 do_vertex_only: 0
 
 #Monte Carlo parameters
@@ -57,17 +56,18 @@ dgother: -0.95
 
 #Chemical potentials
 #muCD is ln(10muM)
-muCD: -11.5
+#muCD: -11.5
 #muCD: -10.8
-#muCD: -6.91
+muCD: -6.91
+#muCD: 5
 #dmu controls the conformational
 #free energy difference between AB and CD
 dmu: -4.5
 
 #Drug parameters
 #mudrug is ln(40muM)
-mudrug: -10.1
-#mudrug: -1000.0
+#mudrug: -10.1
+mudrug: -1000.0
 #Drug-dimer binding affinity made up for now
 gdrug0: -17.0
 

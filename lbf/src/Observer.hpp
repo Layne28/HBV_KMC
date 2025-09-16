@@ -51,6 +51,7 @@ public:
     void dump_lammps_traj_restart(System &g, int time0);
     void dump_lammps_data_file(System &g, int time0);
     void dump_lammps_traj_dimers(System &g, int time0);
+    void dump_lammps_traj_angles(System &g, int time0);
     void dump_lammps_data_dimers(System &g, int time0);
 
     void dump_restart_lammps_data_file(System &g, int time0);

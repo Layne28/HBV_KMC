@@ -42,11 +42,11 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
     l0[2] = .95;
     l0[3] = 1.05;
 
-    //Set equilibrium bond angles (note: in the paper, this is theta0!)
-    phi0[0] = 1.05;
-    phi0[1] = 1.17;
-    phi0[2] = .98;
-    phi0[3] = 1.05;
+    //Set default equilibrium bond angles (note: in the paper, this is theta0!)
+    phi0[0] = 1.05; //DC-CD
+    phi0[1] = 1.17; //BA-AB
+    phi0[2] = .98;  //AB-CD
+    phi0[3] = 1.05; //AB-DC
 
     xi = .5;
     T = 1; //temperature
@@ -176,6 +176,7 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
     //g.l_thermal_sigma = g.l_thermal_kappa;//sqrt(2.0*(alp*g.T/g.epsilon[0]));
     gaussian_sigma = 0.5 * l_thermal_kappa; 
 
+	cout << "kappa0: " << kappa[0] << endl;
     cout << "l_thermal_sigma is " << l_thermal_sigma<<endl;
     cout << "l_thermal_kappa is " << l_thermal_kappa<<endl;
     cout << "theta_thermal_kappa is " << theta_thermal_kappa<<endl;
@@ -234,7 +235,12 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	if(theParams.is_key("kappa0")) kappa[0] = std::stod(theParams.get_value("kappa0"));
 	//Angle spring constant
 	if(theParams.is_key("kappaPhi0")) kappaPhi[0] = std::stod(theParams.get_value("kappaPhi0"));
-	//Bond (dihedral?) angles
+	//Bond angles
+	if(theParams.is_key("phi0")) phi0[0] = std::stod(theParams.get_value("phi0"));
+	if(theParams.is_key("phi1")) phi0[1] = std::stod(theParams.get_value("phi1"));
+	if(theParams.is_key("phi2")) phi0[2] = std::stod(theParams.get_value("phi2"));
+	if(theParams.is_key("phi3")) phi0[3] = std::stod(theParams.get_value("phi3"));
+	//Dihedral angles
 	if(theParams.is_key("theta0")) theta0[0] = std::stod(theParams.get_value("theta0"));
 	if(theParams.is_key("theta1")) theta0[1] = std::stod(theParams.get_value("theta1"));
 	//Overall binding free energy (aka "LnK")
@@ -3522,6 +3528,101 @@ double System::bend_energy(int heindex0)
 	//	theta*=-1;
 	//}
 
+	int angle0 = get_dihedral_type(etype, nexttype, prevtype, opetype, opnexttype, opprevtype);
+
+	//bendE = kappa[et] * (1-ndot);
+	//double theta = acos(ndot);
+	//cout << " preferred angle is " << angle0 <<endl;
+	//cout << "kappa[0] is " << kappa[0] << endl;
+
+	/*if ((etype == 0 && optype == 3)  || ( etype == 3 && optype == 0 )) { angle0=0;}
+	else if ((etype==1 && optype==2) || (etype==2 && optype==1)) {angle0=1;}
+	else { cout << "types don't match" <<endl;}*/
+
+	//bendE = .5*kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);
+
+	/*if (dot(tempvec, he[heindex0].n) > 0)
+	{
+		theta=PI+theta;
+		//cout <<" convex"<<endl;
+		
+	}
+	bendE = .5*kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);*/
+
+	if (theta0[angle0] > 0)
+	{
+		bendE = kappa[angle0] * (1 - cos(theta - theta0[angle0]));
+
+		if (dot(tempvec, he[heindex0].n) > 0)
+		{
+			//cout <<"convex" <<endl;
+			//theta=PI+theta;
+			//bendE = kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);
+			bendE = kappa[angle0] * (1 - cos(-theta - theta0[angle0]));
+
+			//if (theta<theta0[angle0]) {bendE*=1000; }
+			//else {bendE*=100;  }
+			bendE *= 1000;
+		}
+		//bendE = kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);
+	}
+	else
+	{
+		bendE = kappa[angle0] * (1 - ndot);
+	}
+	// cout << " convex"<<endl;}
+	/** ???? correct for convex**/
+	//cout << " angle0 is "<< angle0<<endl;
+	//cout << "theta is " << theta<<endl;
+	//cout << "BEND E IS " << bendE <<endl;
+	if (bendE < 0)
+	{
+		cout << "BEND E IS " << bendE << endl;
+		exit(-1);
+	}
+
+	delete[] tempvec;
+
+	return bendE;
+}
+
+int System::get_angle_type(int etype, int nexttype)
+{
+	int angle_type = -1;
+
+	if ((etype == 0 && nexttype == 0) || (etype == 3 && nexttype == 3) || (etype == 3 && nexttype == 0) || (etype == 0 && nexttype == 3))
+	{ //(cd-cd)  // T4 and hexamer sheet
+		angle_type = 0;
+		//cout << "PHI 0 //CD -CD" <<endl;
+	}
+	else if ((etype == 1 && nexttype == 2))
+	{ //(ab-ab)
+		angle_type = 1;
+		//cout << "PHI 1 //BA-AB " <<endl;
+	}
+	else if ((etype == 0 && nexttype == 1) || (etype == 3 && nexttype == 1))
+	{ //( CD-BA) (DC-BA) (<60 drug doesnt binds)
+		angle_type = 2;
+		//cout << "PHI 2 //DC-BA" <<endl;
+	}
+	else if ((etype == 2 && nexttype == 0) || (etype == 2 && nexttype == 3))
+	{ //AB-DC  and T3  (=60 drug binds)
+		angle_type = 2;
+	}
+
+	else
+	{
+		//cout << "PHI 1 //all other" <<endl;
+		//cout << "angle_type other  etype is " << etype << " nexttype is " << nexttype <<endl;
+		angle_type = 0;
+		//exit(-1);
+	}
+
+	return angle_type;
+}
+
+int System::get_dihedral_type(int etype, int nexttype, int prevtype, int opetype, int opnexttype, int opprevtype)
+{
 	int angle0 = -1; //theta0[0]/2;
 	//CD-BA-AB :: DC-BA-AB in T3
 	if (((etype == 0 || etype == 3) && nexttype == 1 && prevtype == 2) && ((opetype == 3 || opetype == 0) && opnexttype == 1 && opprevtype == 2))
@@ -3577,63 +3678,8 @@ double System::bend_energy(int heindex0)
 		angle0 = 3;
 		//cout << "//all other   "<<endl;
 	}
-	//else if ((etype==1 && nexttype==0 && prevtype==1) &&	(opetype==1 && opnexttype==0 && opprevtype==1)) {//  CD-CD-CD :: CD-CD-CD
-	//	angle0=-theta0[0];//trying
-	//}*/
 
-	//bendE = kappa[et] * (1-ndot);
-	//double theta = acos(ndot);
-	//cout << " preferred angle is " << angle0 <<endl;
-	//cout << "kappa[0] is " << kappa[0] << endl;
-
-	/*if ((etype == 0 && optype == 3)  || ( etype == 3 && optype == 0 )) { angle0=0;}
-	else if ((etype==1 && optype==2) || (etype==2 && optype==1)) {angle0=1;}
-	else { cout << "types don't match" <<endl;}*/
-
-	//bendE = .5*kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);
-
-	/*if (dot(tempvec, he[heindex0].n) > 0)
-	{
-		theta=PI+theta;
-		//cout <<" convex"<<endl;
-		
-	}
-	bendE = .5*kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);*/
-
-	if (theta0[angle0] > 0)
-	{
-		bendE = kappa[angle0] * (1 - cos(theta - theta0[angle0]));
-
-		if (dot(tempvec, he[heindex0].n) > 0)
-		{
-			//cout <<"convex" <<endl;
-			//theta=PI+theta;
-			//bendE = kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);
-			bendE = kappa[angle0] * (1 - cos(-theta - theta0[angle0]));
-
-			//if (theta<theta0[angle0]) {bendE*=1000; }
-			//else {bendE*=100;  }
-			bendE *= 1000;
-		}
-		//bendE = kappa[angle0] * (theta - theta0[angle0])*(theta - theta0[angle0]);
-	}
-	else
-	{
-		bendE = kappa[angle0] * (1 - ndot);
-	}
-	// cout << " convex"<<endl;}
-	/** ???? correct for convex**/
-	//cout << " angle0 is "<< angle0<<endl;
-	//cout << "BEND E IS " << bendE <<endl;
-	if (bendE < 0)
-	{
-		cout << "BEND E IS " << bendE << endl;
-		exit(-1);
-	}
-
-	delete[] tempvec;
-
-	return bendE;
+	return angle0;
 }
 
 double System::dimer_bend_energy(int heindex0)
@@ -3662,39 +3708,7 @@ double System::dimer_bend_energy(int heindex0)
 	int phitype = -1;
 	int etype = he[heindex0].type;
 	int nexttype = he[nextindex].type;
-	//cout << " type " << it->type << "nexttype" << nexttype <<endl;
-	if ((etype == 0 && nexttype == 0) || (etype == 3 && nexttype == 3) || (etype == 3 && nexttype == 0) || (etype == 0 && nexttype == 3))
-	{ //(cd-cd)  // T4 and hexamer sheet
-		phitype = 0;
-		//cout << "PHI 0 //CD -CD" <<endl;
-	}
-	else if ((etype == 1 && nexttype == 2))
-	{ //(ab-ab)
-		phitype = 1;
-		//cout << "PHI 1 //BA-AB " <<endl;
-	}
-	else if ((etype == 0 && nexttype == 1) || (etype == 3 && nexttype == 1))
-	{ //( CD-BA) (DC-BA) (<60 drug doesnt binds)
-		phitype = 2;
-		//cout << "PHI 2 //DC-BA" <<endl;
-	}
-	else if ((etype == 2 && nexttype == 0) || (etype == 2 && nexttype == 3))
-	{ //AB-DC  and T3  (=60 drug binds)
-		phitype = 2;
-	}
-
-	else
-	{
-		//cout << "PHI 1 //all other" <<endl;
-		//cout << "phitype other  etype is " << etype << " nexttype is " << nexttype <<endl;
-		phitype = 0;
-		//exit(-1);
-	}
-
-	if (he[nextindex].din == 1)
-		phitype = 3;
-	//cout <<phitype<< " is phitype "<<endl;
-	//if phi0[phitype]==0
+	phitype = get_angle_type(etype, nexttype);
 
 	double kPhi = kappaPhi[phitype];
 	//if (he[nextindex].din==1) kPhi*=10;
@@ -4922,7 +4936,7 @@ int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step = -1)
 
 void recenter(System &g)
 {
-
+	//Set assembly center of mass to zero
 	double XCM = 0;
 	double YCM = 0;
 	double ZCM = 0;
@@ -5121,7 +5135,79 @@ void make_initial_pentamer(System &g)
 	g.update_boundary();
 }
 
-void make_initial_diamond_T4(System &g)
+void make_initial_diamond_AB(System &g)
+{
+	//Create vertices
+	double xyz0[3];
+	xyz0[0] = 0;
+	xyz0[1] = 0;
+	xyz0[2] = 0;
+
+	for (int i = 0; i < 3; i++)
+	{
+		g.add_vertex(xyz0);
+		xyz0[0] = cos(i * M_PI / 3);
+		xyz0[1] = sin(i * M_PI / 3);
+		xyz0[2] = 0;
+	}
+	//Last vertex creates a diamond
+	xyz0[0] = 0;
+	xyz0[1] = 2*sin(M_PI/3);
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+	//Here, the first two arguments are the vertex indices
+	//The third argument is the dimer type (0=CD,1=BA,2=AB,3=DC)
+	//The last argument says whether this half edge is on the boundary or not
+	//First AB
+	g.add_half_edge_type(g.v[0].vid, g.v[1].vid, 1, -1); 
+	g.add_half_edge_type(g.v[1].vid, g.v[0].vid, 2, 0); //boundary
+	//Middle AB
+	g.add_half_edge_type(g.v[1].vid, g.v[2].vid, 2, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[1].vid, 1, -1);
+	//Top right CD
+	g.add_half_edge_type(g.v[2].vid, g.v[0].vid, 0, -1);
+	g.add_half_edge_type(g.v[0].vid, g.v[2].vid, 3, 0); //boundary
+	//Bottom right CD
+	g.add_half_edge_type(g.v[1].vid, g.v[3].vid, 2, -1);
+	g.add_half_edge_type(g.v[3].vid, g.v[1].vid, 1, 0); //boundary
+	//Bottom left AB
+	g.add_half_edge_type(g.v[3].vid, g.v[2].vid, 0, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[3].vid, 3, 0); //boundary
+
+	//Set indices determining half edge connectivity
+	//TODO: update comments below to reflect correct connectivity
+	g.set_prev_next(g.he[0].id, g.he[4].id, g.he[2].id); //BA-AB-CD
+	g.set_prev_next(g.he[2].id, g.he[0].id, g.he[4].id); //AB-CD-BA
+	g.set_prev_next(g.he[4].id, g.he[2].id, g.he[0].id); //CD-BA-AB
+	g.set_prev_next(g.he[6].id, g.he[3].id, g.he[8].id); //CD-CD-CD
+	g.set_prev_next(g.he[8].id, g.he[6].id, g.he[3].id); //CD-CD-CD
+	g.set_prev_next(g.he[3].id, g.he[8].id, g.he[6].id); //CD-CD-CD
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	g.update_boundary();
+	std:: cout << "AFTER update_boundary:" << std::endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	//exit(1);
+}
+
+void make_initial_diamond_CD(System &g)
 {
 	//Create vertices
 	double xyz0[3];
@@ -5192,7 +5278,7 @@ void make_initial_diamond_T4(System &g)
 	//exit(1);
 }
 
-void make_initial_diamond_CD(System &g)
+void make_initial_diamond_DC(System &g)
 {
 	//Create vertices
 	double xyz0[3];

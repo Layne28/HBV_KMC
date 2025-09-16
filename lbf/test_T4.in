@@ -29,15 +29,9 @@ kappa0: 40
 #change kappaPhi0 -> kappa_theta
 kappaPhi0: 800
 
-#Binding angles
-phi0: 0.929
-phi1: 0.945
-phi2: 0.863
-phi3: 1.005
-
 #Dihedral angles
-theta0: 0.710
-theta1: 0.554
+theta0: 0.240
+theta1: 0.480
 
 #Dimer-dimer binding affinities
 gb0: -9.8

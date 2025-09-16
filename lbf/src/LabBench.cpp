@@ -65,32 +65,19 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     ofile = fopen((obs.output_dir + "/" + subdir + "/energy.dat").c_str(), "a");
     anglefile = fopen((obs.output_dir + "/" + subdir + "/angle_bonds.dat").c_str(), "a");
 
-    // if (obs.do_h5md==1) {
-    //     obs.open_h5md(sys, subdir);
-    // }
-
     for (int i=0; i<nstps; i++) {
         //Record data
         if (i%info_freq==0) std::cout << "step " << i << std::endl;
-
-        // if (obs.do_h5md==1) {
-        //     if (i%config_freq==0) {
-        //         obs.dump_h5md(sys, subdir);
-        //     }
-        // }
-
 
         //Do some checks and output data
         double ee = 0;
         if (i % (obs.freq_log) == 0 ) 
         {
             
-            if (sys.Nhe==6) recenter(sys);
+            if (sys.Nhe==6) recenter(sys); //set com to zero
             sys.update_boundary();
             sys.check_odd_neigh();
             ee = sys.compute_energy();
-
-            
 
             time(&timer2);
             seconds = difftime(timer2, timer1);
@@ -112,7 +99,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
 
         if (i % obs.particles_freq == 0)
         {
-            dump_lammps_traj_dimers(sys, i);
+            obs.dump_lammps_traj_dimers(sys, i);
+            obs.dump_lammps_traj_angles(sys, i);
         }
 
         if (i % obs.print_freq == 0 )
@@ -238,7 +226,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
 
             fprintf(stderr, "STOP for now - too long\n");
             sys.update_boundary();
-            dump_lammps_traj_dimers(sys, int(i));
+            obs.dump_lammps_traj_dimers(sys, int(i));
+            obs.dump_lammps_traj_angles(sys, int(i));
             //dump_lammps_traj_restart(sys, int(sweep_count));
             dump_lammps_data_dimers(sys, 77777777);
             dump_restart_lammps_data_file(sys, i);
@@ -274,7 +263,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
         /***************************** */
     }
 
-    dump_lammps_traj_dimers(sys, frame++);
+    obs.dump_lammps_traj_dimers(sys, frame++);
+    obs.dump_lammps_traj_angles(sys, frame++);
     dump_lammps_data_file(sys, 22222222);
     dump_lammps_data_dimers(sys, 11111111);
     dump_restart_lammps_data_file(sys, nstps);
@@ -353,12 +343,15 @@ void LabBench::run_standard_simulation()
     if(initial_config=="triangle"){
         make_initial_triangle(sys);
     }
-    else if(initial_config=="diamond_T4"){
-        make_initial_diamond_T4(sys);
+    else if(initial_config=="diamond_AB"){
+        make_initial_diamond_AB(sys);
     }
     else if(initial_config=="diamond_CD"){
         //std::cout << "TEST" << std::endl;
         make_initial_diamond_CD(sys);
+    }
+    else if(initial_config=="diamond_DC"){
+        make_initial_diamond_DC(sys);
     }
     else if(initial_config=="pentamer"){
         make_initial_pentamer(sys);

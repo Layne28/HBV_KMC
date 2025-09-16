@@ -1,18 +1,16 @@
 #Observer
-output_dir: ./T4_test_readin
+output_dir: ./diamond_CD_curved
 config_freq: 1000
 thermo_freq: 1000
 print_freq: 1000
-restart_freq: 100000
 
 #Run info
-equil_steps: 0
-#production_steps: 50000000
+equil_steps: 10000
 production_steps: 1000000
 info_freq: 1000
 simulation: standard
-initial_config: T4/seed=2/restart_lammps_4000000.dat
-do_vertex_only: 0
+initial_config: diamond_CD
+do_vertex_only: 1
 
 #Monte Carlo parameters
 ks0: 0.002
@@ -29,37 +27,24 @@ kappa0: 40
 #change kappaPhi0 -> kappa_theta
 kappaPhi0: 800
 
-#Binding angles
-phi0: 0.929
-phi1: 0.945
-phi2: 0.863
-phi3: 1.005
-
 #Dihedral angles
 theta0: 0.710
 theta1: 0.554
 
 #Dimer-dimer binding affinities
 gb0: -9.8
-#A-A
+#gb0: 10.0
 dg12: 0.3
-#B-C
 dg01: 0.1
-#D-B
 dg20: -0.1
-#C-D
 dg33: 0.0
 #dg00: 0.0
-#D-C
 dg00: -0.6
-#Everything else
 dgother: -0.95
 
 #Chemical potentials
 #muCD is ln(10muM)
 muCD: -11.5
-#muCD: -10.8
-#muCD: -6.91
 #dmu controls the conformational
 #free energy difference between AB and CD
 dmu: -4.5
@@ -67,7 +52,6 @@ dmu: -4.5
 #Drug parameters
 #mudrug is ln(40muM)
 mudrug: -10.1
-#mudrug: -1000.0
 #Drug-dimer binding affinity made up for now
 gdrug0: -17.0
 
