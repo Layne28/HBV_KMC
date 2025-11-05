@@ -7,8 +7,21 @@ import math
 import sys
 import numpy as np
 import csv
+import os
 
 def main():
+    myfolder = sys.argv[1]
+    subfolders = [e for e in os.listdir(myfolder) if e.startswith('seed')]
+    nseeds = len(subfolders)
+    for i in range(nseeds):
+        myfile = myfolder + '/seed-%d/energy.dat' % (i+1)
+        if os.path.exists(myfile):
+            #print(myfile)
+            if os.path.getsize(myfile) > 0:
+                print(myfile)
+                process_trajectory(myfile)
+
+def process_trajectory(trajectory_file):
     #Define intervals to use for defining states
     n_dimer_interv = 1
     n_CD_interv = 1
@@ -51,10 +64,10 @@ def main():
                 n_CD_string = '%d-%d' % (j*n_CD_interv, j*n_CD_interv+n_CD_interv-1)
             state_list.append("ndimer=%s_nCD=%s" % (n_dimer_string, n_CD_string))
 
-    print(state_list)
+    #print(state_list)
 
     #Read in trajectory file to coarse-grain
-    myfile = sys.argv[1] #e.g. energy.dat
+    myfile = trajectory_file#sys.argv[1] #e.g. energy.dat
     myfolder = '/'.join(myfile.split('/')[:-1])
 
     data_time = np.genfromtxt(myfile, dtype=float, delimiter=',', names=True, usecols=('sweep'))
@@ -87,7 +100,7 @@ def main():
     for i in range(len(dimer_states)):
         state_traj.append("ndimer=%s_nCD=%s" % (dimer_states[i], CD_states[i]))
 
-    print(state_traj)
+    #print(state_traj)
 
     with open(myfolder + '/cg_traj.txt', 'w') as f:
         f.write('# time macrostate\n')
