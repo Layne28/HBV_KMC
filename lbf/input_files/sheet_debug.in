@@ -1,21 +1,20 @@
 #Observer
-output_dir: ./data/smriti_drug_low_salt
+output_dir: ./data/sheet_debug_no_drug
 config_freq: 1000
 thermo_freq: 100
 print_freq: 1000
 #print_freq: 1
 
 #Run info
-equil_steps: 1000
+equil_steps: 10000
 production_steps: 10000000
 info_freq: 10000
 simulation: standard
+debug_sheet: 1
 
 #Monte Carlo parameters
-ks0: 0.002
-kd0: 0.002
-#ks0: 0.0
-#kd0: 10.0
+ks0: 0.02
+kd0: 0.00000000001
 
 ###########################
 #System/Geometry parameters
@@ -39,7 +38,7 @@ dg01: 0.1
 dg20: -0.1
 dg33: 0.0
 #dg00: 0.0
-dg00: -0.6
+dg00: -0.8
 dgother: -0.95
 
 #Chemical potentials
@@ -47,13 +46,14 @@ dgother: -0.95
 muCD: -11.5
 #dmu controls the conformational
 #free energy difference between AB and CD
-dmu: -5.5
+#Here, make AB unfavorable to test CD
+dmu: -100.0 
 
 #Drug parameters
 #mudrug is ln(40muM)
-mudrug: -10.1
+mudrug: -1000.0
 #Drug-dimer binding affinity made up for now
-gdrug0: -21.0
+gdrug0: 10.0
 
 
   

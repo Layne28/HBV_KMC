@@ -18,6 +18,7 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	Nv5 = 0;
 	Nv6 = 0;
 	Nhe = 0;
+	Nd = 0; //no. of CAMs
 	epsilon = nullptr;
 	kappa = nullptr;
 	kappaPhi = nullptr;
@@ -74,7 +75,7 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 
 	std::cout << mu[0] << " " << mu[1] << " " << mu[2] << " " << mu[3] << std::endl;
 
-	/* GB (dimer-dimer interaction) parameteres */
+	/* GB (dimer-dimer interaction) parameters */
     for (int i = 0; i < Ntype; i++)
     {
         for (int j = 0; j < Ntype; j++)
@@ -159,7 +160,9 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
         for (int j = 0; j < Ntype; j++)
         {
 			if(i==0 && j==0){ //CD-CD
-				gdrug[i][j] = gdrug0-5.88; //LBF added 072125
+				//gdrug[i][j] = gdrug0-5.88; //LBF added 072125
+				//std::cout << -gb[0][0]+gb[3][3] << std::endl;
+				gdrug[i][j] = gdrug0-gb[0][0]+gb[3][3]; //makes DC like CD when drug binds
 			}
 			if(i==3 && j==3){ //DC-DC
 				gdrug[i][j] = gdrug0;
@@ -336,7 +339,7 @@ void System::initialize(int Ntype0)
 
 	xi=0;
 
-	lenpoints=20000000;
+	lenpoints=200000000;
 	dist_points = new double *[lenpoints];
 
 	for (int i = 0; i < lenpoints; i++)
@@ -348,8 +351,8 @@ void System::initialize(int Ntype0)
 		}
 	}
 
-	vidtoindex = new int[2000000000];
-	heidtoindex = new int[2000000000];
+	vidtoindex = new int[lenpoints];
+	heidtoindex = new int[lenpoints];
 	epsilon = new double[Ntype];
 	kappa = new double[Ntype];
 	kappaPhi = new double[Ntype];
@@ -2221,6 +2224,8 @@ double System::move_p(double *pi, double *pf, gsl_rng *r)
 	
 	return d;
 }
+
+
 double System::move_p_gaussian(double len_v, double *pi, double *pf, gsl_rng *r)
 {
 	double *x;
@@ -3577,9 +3582,16 @@ double System::bend_energy(int heindex0)
 	//cout << "BEND E IS " << bendE <<endl;
 	if (bendE < 0)
 	{
-		cout << "BEND E IS " << bendE << endl;
-		exit(-1);
+		if(abs(bendE)< 1e-12){
+			cout << "WARNING: small negative bending energy. Correcting to zero." << endl;
+			bendE = 0.0;
+		}
+		else{
+			cout << "ERROR: BEND E IS " << bendE << endl;
+			exit(-1);
+		}
 	}
+
 
 	delete[] tempvec;
 

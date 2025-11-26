@@ -9,7 +9,12 @@ import csv
 import os
 import pickle
 
-def get_counts(msm, MM, trajfile):
+def get_counts(msm, MM, trajfile, maxsweep):
+
+    #maxsweep is the max trajectory length
+    #if trajectory file stops earlier than this
+    #then pad the MSM count with transitions
+    #going from last frame state to last frame state
 
     trajs = []
     traj0 = []
@@ -25,9 +30,13 @@ def get_counts(msm, MM, trajfile):
     trajs.append(traj0)
 
     #now that we have some data, let's add transition counts to the msm.
+    #Need to "pad" trajectories shorter than the max trajectory length
     delta_t = times[1]-times[0] 
+    maxframe = int(maxsweep/delta_t)
+    print('maxframe:', maxframe)
     tau = msm.get_lag()
     lag = int(tau/delta_t)
+    print('lag: ', lag)
     if tau<delta_t:
         print('WARNING: lag time is less than separation between frames. Setting lag time to separation between frames, %f.' % delta_t)
         lag = 1
@@ -36,6 +45,9 @@ def get_counts(msm, MM, trajfile):
             a = MM.state_to_index(traj[i])
             b = MM.state_to_index(traj[i+lag])
             msm.add_count(a,b,1)
+        sfinal = MM.state_to_index(traj[-1])
+        for i in range(len(traj),maxframe):
+            msm.add_count(sfinal,sfinal)
     
     return
 
@@ -51,25 +63,30 @@ def main():
     #Create an empty macrostate map object
     MM = MacrostateMap()
 
-    #Get states from trajectory
+    #Get states from trajectories
     state_list = []
     subfolders = [e for e in os.listdir(cg_traj_folder) if e.startswith('seed')]
     nseeds = len(subfolders)
+    #Need to "pad" trajectories shorter than the max trajectory length
+    maxsweep = 0
     for i in range(nseeds):
-        #cg_traj_file = cg_traj_folder + '/seed=%d/prod/cg_traj.txt' % (i+1)
-        cg_traj_file = cg_traj_folder + '/seed-%d/cg_traj.txt' % (i+1)
+        cg_traj_file = cg_traj_folder + '/seed=%d/prod/cg_traj.txt' % (i+1)
+        #cg_traj_file = cg_traj_folder + '/seed-%d/cg_traj.txt' % (i+1)
         print(cg_traj_file)
         if os.path.exists(cg_traj_file):
             with open(cg_traj_file) as f:
                 lines = f.readlines()
                 lines = lines[1:]
+            if float(lines[-1].split(' ')[0])>maxsweep:
+                maxsweep = float(lines[-1].split(' ')[0])
             for line in lines:
                 line = line.rstrip()
                 state = line.split(' ')[-1]
                 #print(state)
                 if state not in state_list:
                     state_list.append(state)
-
+    maxsweep = 2*10**8
+    print(maxsweep)
     for state in state_list:
         MM.update_maps(state)
 
@@ -81,11 +98,11 @@ def main():
 
     #Get counts from coarse-grained trajectories
     for i in range(nseeds):
-        #cg_traj_file = cg_traj_folder + '/seed=%d/prod/cg_traj.txt' % (i+1)
-        cg_traj_file = cg_traj_folder + '/seed-%d/cg_traj.txt' % (i+1)
+        cg_traj_file = cg_traj_folder + '/seed=%d/prod/cg_traj.txt' % (i+1)
+        #cg_traj_file = cg_traj_folder + '/seed-%d/cg_traj.txt' % (i+1)
         print(cg_traj_file)
         if os.path.exists(cg_traj_file):
-            get_counts(msm, MM, cg_traj_file)
+            get_counts(msm, MM, cg_traj_file, maxsweep)
 
     #the count matrix is built. Now we finalize it to construct the transition matrices
     msm.finalize_counts(MM)
@@ -104,21 +121,21 @@ def main():
     #Now we can use the transition matrix to compute things. Lets solve the forward 
     #kolmogorov equation to predict the yield of monomer and dimers if we start with all
     #monomers
-    cmap = mpl.colormaps['plasma']
-    colors = cmap(np.linspace(0,1,msm._MSM__num_states))
-    p0 = [0]*msm._MSM__num_states#[1,0] #initial distribution. 100% A
-    p0[0] = 1
-    T  = 20000  #final time (in lags) 
-    p  = msm.solve_FKE(p0, T)
-    print(p.shape)
-    #plt.plot(range(T+1), p, linewidth=2, color=colors)
-    for i in range(p.shape[1]):
-        plt.plot(range(T+1), p[:,i], linewidth=2, color=colors[i])
-    plt.xlabel("Lag Times")
-    plt.ylabel("Yield")
-    plt.legend(np.arange(msm._MSM__num_states).tolist())
+    # cmap = mpl.colormaps['plasma']
+    # colors = cmap(np.linspace(0,1,msm._MSM__num_states))
+    # p0 = [0]*msm._MSM__num_states#[1,0] #initial distribution. 100% A
+    # p0[0] = 1
+    # T  = 20000  #final time (in lags) 
+    # p  = msm.solve_FKE(p0, T)
+    # print(p.shape)
+    # #plt.plot(range(T+1), p, linewidth=2, color=colors)
+    # for i in range(p.shape[1]):
+    #     plt.plot(range(T+1), p[:,i], linewidth=2, color=colors[i])
+    # plt.xlabel("Lag Times")
+    # plt.ylabel("Yield")
+    # plt.legend(np.arange(msm._MSM__num_states).tolist())
     #plt.legend(["A", "B"])
-    plt.show()
+    #plt.show()
 
     # #if we start with all dimers instead, we just change p0
     # p0 = [0, 1] #initial distribution, 100% dimer

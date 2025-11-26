@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./data/smriti_drug_low_salt
+output_dir: ./data/smriti_drug_low_salt_debug
 config_freq: 1000
 thermo_freq: 100
 print_freq: 1000
@@ -10,10 +10,11 @@ equil_steps: 1000
 production_steps: 10000000
 info_freq: 10000
 simulation: standard
+debug_sheet: 1
 
 #Monte Carlo parameters
-ks0: 0.002
-kd0: 0.002
+ks0: 0.02
+kd0: 0.02
 #ks0: 0.0
 #kd0: 10.0
 

@@ -88,7 +88,7 @@ public:
 	int Nv6;
 	int Nhe;
 	int Nsurf;
-	int Nd;
+	int Nd; //No. drug/CAM molecules
 	int NAB;
 	int NAB_in;
 	int NCD;

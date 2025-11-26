@@ -27,6 +27,7 @@ public:
     MC solver;
     gsl_rng *rg;
     int seed;
+    int stop_early = 0;
 
     std::string simulation = "standard";
     std::string initial_config = "triangle";

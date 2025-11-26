@@ -13,6 +13,7 @@ LabBench::LabBench(ParamDict& theParams, gsl_rng*& theGen) : sys(theParams, theG
     if(theParams.is_key("simulation")) simulation = theParams.get_value("simulation");
     if(theParams.is_key("initial_config")) initial_config = theParams.get_value("initial_config");
     if(theParams.is_key("seed")) seed = std::stoi(theParams.get_value("seed"));
+    if(theParams.is_key("stop_early")) stop_early = std::stoi(theParams.get_value("stop_early"));
 }
 
 LabBench::~LabBench() {}
@@ -54,7 +55,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     int lastNheGrowth=0;
     int npace=0;
     double avgpace=0;
-    int avgAddInterval=10000;
+    int avgAddInterval=2000;//10000;
 
     //Write out parameters to file
     obs.dump_parameters(sys, subdir);
@@ -100,7 +101,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
         if (i % obs.particles_freq == 0)
         {
             obs.dump_lammps_traj_dimers(sys, i);
-            obs.dump_lammps_traj_angles(sys, i);
+            //obs.dump_lammps_traj_angles(sys, i);
         }
 
         if (i % obs.print_freq == 0 )
@@ -182,13 +183,15 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
         //see if capsid is growing or it is stalled in mixed morphology
         if (sys.Nhe > minHE_update_neigh && i % (10*avgAddInterval) == 0)
         {    
+            std::cout << "Stalled? Last Nhe: " << lastNhe << " current Nhe: " << sys.Nhe << std::endl;
             sys.update_geometry_parameters();
             if ( sys.Nhe - lastNhe<=2 ){
                 if ((sys.Nhe >= 220 && sys.NCD_T4_in >=26 && sys.NCD_T3_in >= 3  && sys.Nsurf > 10 ) || 
                     (sys.Nhe >= 160 && sys.NCD_T4_in >= 3 && sys.NCD_T3_in >=16  && sys.Nsurf > 10) || 
-                    (sys.Nhe >= 200 && sys.NCD_T4_in >= 5 && sys.NCD_T3_in >=5  && sys.Nsurf > 10) )
+                    (sys.Nhe >= 200 && sys.NCD_T4_in >= 5 && sys.NCD_T3_in >=5  && sys.Nsurf > 10) ||
+                    (sys.Nhe >= 200 && sys.NCD_T4_in >= 5 && sys.NCD_Hex>=1))
                     {
-            //         cout << "STOP for now - mixed morph" << endl;
+                        cout << "STOP for now - mixed morph" << endl;
                         sys.update_boundary();
                         //dump_lammps_traj_dimers(sys, int(i));
                         //dump_lammps_data_dimers(sys, 44444444);
@@ -196,7 +199,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
                         time(&timer2);
                         seconds = difftime(timer2, timer1);
                         dump_analysis(sys, ofile, i, seed, seconds);
-            //           exit(-1);
+                       exit(-1);
                     }
             }
             
@@ -204,7 +207,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             if (i % (100*avgAddInterval) == 0)
             {
 
-                if (sys.NCD_T4_in>0 && sys.NCD_T3_in>0 && abs( sys.Nhe - lastNheGrowth)<=4 ){
+                //if (sys.NCD_T4_in>0 && sys.NCD_T3_in>0 && abs( sys.Nhe - lastNheGrowth)<=4 ){
+                if ((sys.NCD_T4_in>0 && abs( sys.Nhe - lastNheGrowth)<=4) || (sys.NCD_T3_in>0 && abs( sys.Nhe - lastNheGrowth)<=4)){
                     fprintf(stderr, "STOP for now - not growing\n");
                     sys.update_boundary();
                     //dump_lammps_traj_dimers(g, int(sweep_count));
@@ -214,7 +218,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
                     time(&timer2);
                     seconds = difftime(timer2, timer1);
                     dump_analysis(sys, ofile, i, seed, seconds);
-                //  exit(-1);
+                  exit(-1);
                 }
                 lastNheGrowth = sys.Nhe;
             }
@@ -227,7 +231,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             fprintf(stderr, "STOP for now - too long\n");
             sys.update_boundary();
             obs.dump_lammps_traj_dimers(sys, int(i));
-            obs.dump_lammps_traj_angles(sys, int(i));
+            //obs.dump_lammps_traj_angles(sys, int(i));
             //dump_lammps_traj_restart(sys, int(sweep_count));
             dump_lammps_data_dimers(sys, 77777777);
             dump_restart_lammps_data_file(sys, i);
@@ -237,20 +241,44 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             exit(-1);
         }
 
-        if (sys.Nhe >= 310 || sys.Nv >= 65)
-        {
-
-        // fprintf(stderr, "STOP for now - too large\n");
+        //Stop early if you reach T3 or T4
+        if (sys.Nhe==240 && sys.NCD_T4_in==60 && stop_early==1){
+            std::cout << "Assembled T4 capsid! Stopping now." << std::endl;
             sys.update_boundary();
-            //dump_lammps_traj_dimers(sys, int(i));
-            //dump_lammps_data_dimers(sys, 88888888);
-            //dump_lammps_data_dimers(sys, 11111111);
+            obs.dump_lammps_traj_dimers(sys, int(i));
+            dump_lammps_data_dimers(sys, 9999999);
             dump_restart_lammps_data_file(sys, i);
             time(&timer2);
             seconds = difftime(timer2, timer1);
             dump_analysis(sys, ofile, i, seed, seconds);
-        // exit(-1);
+            exit(-1);
         }
+        if (sys.Nhe==180 && sys.NCD_T4_in==30 && stop_early==1){
+            std::cout << "Assembled T3 capsid! Stopping now." << std::endl;
+            sys.update_boundary();
+            obs.dump_lammps_traj_dimers(sys, int(i));
+            dump_lammps_data_dimers(sys, 9999999);
+            dump_restart_lammps_data_file(sys, i);
+            time(&timer2);
+            seconds = difftime(timer2, timer1);
+            dump_analysis(sys, ofile, i, seed, seconds);
+            exit(-1);
+        }
+
+        // if (sys.Nhe >= 310 || sys.Nv >= 65)
+        // {
+
+        // // fprintf(stderr, "STOP for now - too large\n");
+        //     sys.update_boundary();
+        //     //dump_lammps_traj_dimers(sys, int(i));
+        //     //dump_lammps_data_dimers(sys, 88888888);
+        //     //dump_lammps_data_dimers(sys, 11111111);
+        //     dump_restart_lammps_data_file(sys, i);
+        //     time(&timer2);
+        //     seconds = difftime(timer2, timer1);
+        //     dump_analysis(sys, ofile, i, seed, seconds);
+        // // exit(-1);
+        // }
         //sweep_count++;
 
         //Dump configuration
@@ -264,7 +292,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     }
 
     obs.dump_lammps_traj_dimers(sys, frame++);
-    obs.dump_lammps_traj_angles(sys, frame++);
+    //obs.dump_lammps_traj_angles(sys, frame++);
     dump_lammps_data_file(sys, 22222222);
     dump_lammps_data_dimers(sys, 11111111);
     dump_restart_lammps_data_file(sys, nstps);
@@ -373,7 +401,7 @@ void LabBench::run_standard_simulation()
     this->run_equil(this->equil_steps);
 
     std::cout << "Doing production run..." << std::endl;
-    this->run(this->production_steps, "/prod", this->obs.particles_freq, this->obs.thermo_freq);
+    this->run(this->production_steps, "", this->obs.particles_freq, this->obs.thermo_freq);
 }
 
 /******************************/

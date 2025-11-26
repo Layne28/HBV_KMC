@@ -8,7 +8,7 @@ Observer::Observer(ParamDict &theParams)
 	if(theParams.is_key("print_freq")) print_freq = std::stoi(theParams.get_value("print_freq"));
 	if(theParams.is_key("restart_freq")) freq_restart = std::stoi(theParams.get_value("restart_freq"));
 
-	freq_log = particles_freq;
+	freq_log = thermo_freq;//particles_freq;
 
     fs::create_directories(output_dir);
 }
@@ -597,6 +597,11 @@ void Observer::dump_lammps_traj_angles(System &g, int time0)
 
 		if ((it->nextid != -1) && (it->previd != -1))
 		{
+			std::cout << "TEST " << it->type << std::endl;
+			std::cout << "TEST " << it->nextid << std::endl;
+			std::cout << "SIZE: " << g.he.size() << std::endl;
+			std::cout << "TEST " << g.he[it->nextid].type << std::endl;
+
 			atype = g.get_angle_type(it->type, g.he[it->nextid].type);
 
 			//compute angle
@@ -1009,19 +1014,36 @@ void dump_data_frame(System &g, FILE *f, int time)
 	fprintf(stderr, " L0 %.3f L1 %.3f Theta0 %.3f Theta1 %.3f Phi00 %.3f Phi11 %.3f Phi01 %.3f \n", avgL0 / L0, avgL1 / L1, avgTheta0 / Theta0, avgTheta1 / Theta1, avgPhi00 / Phi00, avgPhi11 / Phi11, avgPhi01 / Phi01);
 }
 
+// void dump_analysis(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1)
+// {
+
+// 	if (sweep == 0)
+// 		fprintf(ofile, "sweep,seed,seconds,epsilon,kappa,kappaPhi,theta0,theta1,gb0,mu,dmu,dg,theta2,energy,binding_energy,Nv5,Nv6,NAB,NAB_in,NCD_Hex,NCD_other,NVin,Nhein,NCD_T4_in, NCD_T3_in,NCD_T4,NCD_T3,Nv,NE,Nsurf,Nboundary\n");
+// 																			//Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 	NVin,	Nhein,NCD_T4,	NCD_T3,	Nv,	NE,	Nsurf, Nboundary\n");
+																			
+// 	g.update_geometry_parameters();
+
+// 	fprintf(ofile, "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+// 			sweep, seed, seconds, g.epsilon[0], g.kappa[0], g.kappaPhi[0], g.theta0[0], g.theta0[1], g.gb0, g.mu[0], g.mu[1] - g.mu[0], g.dg, g.theta0[2],
+// 			g.compute_energy(),g.compute_bind_energy(), g.Nv5, g.Nv6, g.NAB, g.NAB_in,  g.NCD_Hex, g.NCD_other, g.Nv_in,g.Nhe_in,g.NCD_T4_in, g.NCD_T3_in,g.NCD_T4, g.NCD_T3,  g.Nv, g.Nhe / 2,g.Nsurf, g.Nboundary);
+// 			                    //Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 		NVin,	Nhein,NCD_T4,	NCD_T3,		Nv,		NE,		Nsurf, 	Nboundary\n");
+// 	fflush(ofile);
+// }
+
+/* Dump key time-varying data*/
 void dump_analysis(System &g, FILE *ofile, int sweep = -1, int seed = -1, int seconds = -1)
 {
 
 	if (sweep == 0)
-		fprintf(ofile, "sweep,seed,seconds,epsilon,kappa,kappaPhi,theta0,theta1,gb0,mu,dmu,dg,theta2,energy,binding_energy,Nv5,Nv6,NAB,NAB_in,NCD_Hex,NCD_other,NVin,Nhein,NCD_T4_in, NCD_T3_in,NCD_T4,NCD_T3,Nv,NE,Nsurf,Nboundary\n");
+		fprintf(ofile, "sweep,seconds,energy,binding_energy,Nv5,Nv6,NAB,NAB_in,NCD_Hex,NCD_other,NVin,Nhein,NCD_T4_in,NCD_T3_in,NCD_T4,NCD_T3,Nv,NE,Nsurf,Nboundary,Nd\n");
 																			//Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 	NVin,	Nhein,NCD_T4,	NCD_T3,	Nv,	NE,	Nsurf, Nboundary\n");
 																			
 	g.update_geometry_parameters();
 
-	fprintf(ofile, "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-			sweep, seed, seconds, g.epsilon[0], g.kappa[0], g.kappaPhi[0], g.theta0[0], g.theta0[1], g.gb0, g.mu[0], g.mu[1] - g.mu[0], g.dg, g.theta0[2],
-			g.compute_energy(),g.compute_bind_energy(), g.Nv5, g.Nv6, g.NAB, g.NAB_in,  g.NCD_Hex, g.NCD_other, g.Nv_in,g.Nhe_in,g.NCD_T4_in, g.NCD_T3_in,g.NCD_T4, g.NCD_T3,  g.Nv, g.Nhe / 2,g.Nsurf, g.Nboundary);
-			                    //Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 		NVin,	Nhein,NCD_T4,	NCD_T3,		Nv,		NE,		Nsurf, 	Nboundary\n");
+	fprintf(ofile, "%d,%d,%.5f,%.5f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+			sweep, seconds, 
+			g.compute_energy(),g.compute_bind_energy(), g.Nv5, g.Nv6, g.NAB, g.NAB_in,  g.NCD_Hex, g.NCD_other, g.Nv_in,g.Nhe_in,g.NCD_T4_in, g.NCD_T3_in,g.NCD_T4, g.NCD_T3,  g.Nv, g.Nhe / 2,g.Nsurf, g.Nboundary, g.Nd);
+			                    //Nv5,	Nv6,	NAB,	NAB_in,	NCD_Hex, 	NCD_other, 		NVin,	Nhein,NCD_T4,	NCD_T3,		Nv,		NE,		Nsurf, 	Nboundary Ndrug/CAM \n");
 	fflush(ofile);
 }
 

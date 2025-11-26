@@ -13,8 +13,10 @@ def main():
     myfolder = sys.argv[1]
     subfolders = [e for e in os.listdir(myfolder) if e.startswith('seed')]
     nseeds = len(subfolders)
+    print(myfolder)
     for i in range(nseeds):
-        myfile = myfolder + '/seed-%d/energy.dat' % (i+1)
+        #myfile = myfolder + '/seed-%d/energy.dat' % (i+1)
+        myfile = myfolder + '/seed=%d/prod/energy.dat' % (i+1)
         if os.path.exists(myfile):
             #print(myfile)
             if os.path.getsize(myfile) > 0:
@@ -69,6 +71,7 @@ def process_trajectory(trajectory_file):
     #Read in trajectory file to coarse-grain
     myfile = trajectory_file#sys.argv[1] #e.g. energy.dat
     myfolder = '/'.join(myfile.split('/')[:-1])
+    print(myfolder)
 
     data_time = np.genfromtxt(myfile, dtype=float, delimiter=',', names=True, usecols=('sweep'))
     data_ndimer = np.genfromtxt(myfile, dtype=float, delimiter=',', names=True, usecols=('NE'))
@@ -79,6 +82,13 @@ def process_trajectory(trajectory_file):
     num_ndimer = np.array(data_ndimer['NE'])
     num_nCD = np.array([data_nCD['NCD_Hex'], data_nCD['NCD_other'], data_nCD['NCD_T4'], data_nCD['NCD_T3']]).T
     num_nCD = np.sum(num_nCD, axis=1)
+
+    #Remove rows with duplicate times
+    data_tot = np.c_[num_time, num_ndimer, num_nCD]
+    data_tot = np.unique(data_tot, axis=0)
+    num_time = data_tot[:,0]
+    num_ndimer = data_tot[:,1]
+    num_nCD = data_tot[:,2]
 
     #Convert to states
     dimer_states = []

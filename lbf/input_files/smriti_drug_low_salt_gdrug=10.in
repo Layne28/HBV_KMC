@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./data/smriti_drug_low_salt
+output_dir: ./data/smriti_drug_low_salt_gdrug=10
 config_freq: 1000
 thermo_freq: 100
 print_freq: 1000
@@ -7,13 +7,13 @@ print_freq: 1000
 
 #Run info
 equil_steps: 1000
-production_steps: 10000000
+production_steps: 1000000
 info_freq: 10000
 simulation: standard
 
 #Monte Carlo parameters
-ks0: 0.002
-kd0: 0.002
+ks0: 0.02
+kd0: 0.02
 #ks0: 0.0
 #kd0: 10.0
 
@@ -53,7 +53,7 @@ dmu: -5.5
 #mudrug is ln(40muM)
 mudrug: -10.1
 #Drug-dimer binding affinity made up for now
-gdrug0: -21.0
+gdrug0: -10.0
 
 
   
