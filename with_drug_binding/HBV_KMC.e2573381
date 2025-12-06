@@ -1,0 +1,4 @@
+cp: cannot stat 'bin/*': No such file or directory
+cp: cannot stat 'input_files/53919': No such file or directory
+sed: can't read /scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_21_19_40_14/farri_T4.in: No such file or directory
+slurmstepd: error: *** JOB 2573381 ON c516-072 CANCELLED AT 2025-11-22T07:40:37 DUE TO TIME LIMIT ***

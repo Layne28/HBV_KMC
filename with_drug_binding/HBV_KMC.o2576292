@@ -1,0 +1,31 @@
+farri_T4
+Pylauncher v5.3 job, type=ClassicLauncher, starting 2025-11-22 09:07:22
+explicit workdir: <<pylauncher_tmp2576292>>
+explicit workdir: <<pylauncher_tmp2576292>>
+Implementor warning: re-using workdir <</scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_22_09_07_21/pylauncher_tmp2576292>>
+Start launcherjob, launcher version: 5.3
+Using uniform core count 6
+Prepating final report
+
+==========================
+Launcher run completed, launcher type: ClassicLauncher
+
+total running time: 42121.43
+
+tasks completed: 100
+tasks aborted: 0
+max runningtime: 41240.44
+avg runningtime: 2066.81
+aggregate      : 206680.88
+speedup        :   4.91
+out of ideal   :  52.00
+
+Host pool of size 312.
+
+Number of tasks executed:
+max: 312
+avg: 29.47
+unused cores: 0
+
+==========================
+

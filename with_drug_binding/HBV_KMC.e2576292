@@ -1,0 +1,3 @@
+cp: cannot stat 'bin/*': No such file or directory
+cp: cannot stat 'input_files/53919': No such file or directory
+sed: can't read /scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_22_09_07_21/farri_T4.in: No such file or directory

@@ -1,0 +1,54 @@
+#Observer
+output_dir: ./mod_salt__k=0.002
+config_freq: 1000000
+thermo_freq: 1000
+print_freq: 1000000
+restart_freq: 10000000
+
+#Run info
+equil_steps: 10000
+production_steps: 200000000
+info_freq: 10000
+simulation: standard
+
+#Monte Carlo parameters
+ks0: 0.002
+kd0: 0.000000001
+
+###########################
+#System/Geometry parameters
+###########################
+
+#change epsilon0 -> kappa_l
+epsilon0: 4200
+#change kappa0 -> kappa_phi
+kappa0: 40
+#change kappaPhi0 -> kappa_theta
+kappaPhi0: 800
+
+#Dihedral angles
+theta0: 0.240
+theta1: 0.480
+
+#Dimer-dimer binding affinities
+gb0: -9.6
+dg12: 0.3
+dg01: 0.1
+dg20: -0.1
+dg33: 0.0
+#dg00: 0.0
+dg00: -0.6
+dgother: -0.95
+
+#Chemical potentials
+#muCD is ln(10muM)
+muCD: -11.5
+#dmu controls the conformational
+#free energy difference between AB and CD
+dmu: -4.5
+
+#Drug parameters
+#set to extremely low concentration
+mudrug: -1000.0
+#Set Drug-dimer binding affinity to zero
+gdrug0: 0.0 

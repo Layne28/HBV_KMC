@@ -1,0 +1,13 @@
+cp: cannot stat 'bin/*': No such file or directory
+cp: cannot stat 'input_files/53919': No such file or directory
+sed: can't read /scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_22_08_39_42/farri_T4.in: No such file or directory
+Traceback (most recent call last):
+  File "/scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_22_08_39_42/scripts/submit_scripts/launch_sweep.py", line 3, in <module>
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 2178, in ClassicLauncher
+    job.run()
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 2087, in run
+    queuestate_update(self.queuestate,self.queue.savestate())
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 2122, in queuestate_update
+    os.makedirs(qdir,exist_ok=True)
+  File "<frozen os>", line 225, in makedirs
+FileExistsError: [Errno 17] File exists: './'

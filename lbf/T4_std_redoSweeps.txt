@@ -1,0 +1,2 @@
+./hbv_kmc T4_std.in 41 seeds.txt
+./hbv_kmc T4_std.in 54 seeds.txt

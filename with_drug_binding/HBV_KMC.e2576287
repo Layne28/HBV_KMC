@@ -1,0 +1,33 @@
+cp: cannot stat 'bin/*': No such file or directory
+cp: cannot stat 'input_files/53919': No such file or directory
+sed: can't read /scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_22_09_05_36/farri_T4.in: No such file or directory
+Traceback (most recent call last):
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 1026, in __init__
+    self.append_node(h)
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 884, in append_node
+    self.commandexecutor.setup_on_node(node)
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 1729, in setup_on_node
+    self.node_client_dict[host] = node.ssh_client
+                                  ^^^^^^^^^^^^^^^
+AttributeError: 'Node' object has no attribute 'ssh_client'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_22_09_05_36/scripts/submit_scripts/launch_sweep.py", line 3, in <module>
+    pylauncher.ClassicLauncher(sys.argv[1],cores=6)
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 2168, in ClassicLauncher
+    hostpool=HostPool(
+             ^^^^^^^^^
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 1027, in __init__
+    except: raise LauncherException("HostPool creation needs n or list")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pylauncher.pylauncher_core.LauncherException: HostPool creation needs n or list
+Exception ignored in: <function HostPool.__del__ at 0x15249779fe20>
+Traceback (most recent call last):
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 1034, in __del__
+    self.commandexecutor.release_from_node(node)
+  File "/home1/apps/pylauncher/5.3.1/src/pylauncher/pylauncher_core.py", line 1732, in release_from_node
+    node.ssh_client.close()
+    ^^^^^^^^^^^^^^^
+AttributeError: 'Node' object has no attribute 'ssh_client'

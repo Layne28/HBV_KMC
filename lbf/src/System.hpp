@@ -88,7 +88,7 @@ public:
 	int Nv6;
 	int Nhe;
 	int Nsurf;
-	int Nd;
+	int Nd; //No. drug/CAM molecules
 	int NAB;
 	int NAB_in;
 	int NCD;
@@ -105,7 +105,9 @@ public:
 	int accepted_vmove;
 	int rejected_vmove;
 
-	int lenpoints;
+	long int lenpoints=20000000;
+
+	int debug_vindex=0;
 
 	int all_neigh;
 	double gb0;

@@ -1,9 +1,11 @@
 CC = g++
 DEBUG = #-g 
-GSLINC=-I$(GSL_HOME)/include
-GSL=-L$(GSL_HOME)/lib
-CFLAGS = -Wall $(DEBUG) -O3 -ffast-math -funroll-loops
-LFLAGS = -Wall $(DEBUG) $(GSL) -lgsl -lgslcblas -lm
+#GSLINC=-I$(GSL_HOME)/include
+GSLINC=-I$(HOME)/.local/include/gsl
+#GSL=-L$(GSL_HOME)/lib
+GSL=-L$(HOME)/.local/lib
+CFLAGS = -Wall $(DEBUG) $(GSLINC) -O3 -ffast-math -funroll-loops -I$(HOME)/.local/include
+LFLAGS = -Wall $(DEBUG) $(GSL) -L$(HOME)/.local/lib/ -l:libgsl.so.28 -lgsl -lgslcblas -lm
 
 
 assembly:  tri_tri_intersect.cpp tri_tri_intersect.hpp Geometry.cpp Geometry.hpp MonteCarlo-types.cpp MonteCarlo-types.hpp run_assembly.cpp

@@ -6,6 +6,7 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
     if(theParams.is_key("ks0")) ks0 = std::stod(theParams.get_value("ks0"));
     if(theParams.is_key("kd0")) kd0 = std::stod(theParams.get_value("kd0"));
     if(theParams.is_key("do_vertex_only")) do_vertex_only = std::stod(theParams.get_value("do_vertex_only"));
+    if(theParams.is_key("debug_sheet")) debug_sheet = std::stoi(theParams.get_value("debug_sheet"));
 
     //***Set RNG***
     rg = the_rg;
@@ -295,17 +296,26 @@ void MC::sweep(System &g)
         int e = g.boundary[ind];
         if (g.check_inside_overlap(e) > 0)
         {
-            //std::cout << "Attempt to add monomer/dimer 2" << std::endl;
-            //std::cout << ps_attempt << std::endl;
+            if(debug_sheet==1){
+                std::cout << "Attempt to add monomer/dimer" << std::endl;
+                //std::cout << ps_attempt << std::endl;
+            }
+
+            //TESTING
+            //ssadd = -1;
             ssadd = attempt_add_monomer_dimer(g, e);
             //std::cout << ssadd << std::endl;
             if (ssadd > 1){
                 dimeradded++;
-                //std::cout << "Dimer added" << std::endl;
+                if(debug_sheet==1){
+                    std::cout << "Dimer added" << std::endl;
+                }
             }
             else if (ssadd > 0){
                 monomeradded++;
-                //std::cout << "Monomer added" << std::endl;
+                if(debug_sheet==1){
+                    std::cout << "Monomer added" << std::endl;
+                }
             }
             ssadd = -1;
             g.update_boundary();
@@ -367,6 +377,7 @@ void MC::sweep(System &g)
                 if (g.no_bond_boundary(e) > 0)
                 {
                     ss = attempt_remove_monomer_dimer_drug(g, e);
+                    ss = 0;
                     if (ss > 1)
                     {
                         dimerremoved++;
@@ -521,6 +532,7 @@ void MC::sweep(System &g)
             if (ss > 0)
             { //cout << "drug added " << endl;
                 drugadded++;
+                //g.Nd++;
             }
 
             //g.update_index();
@@ -545,6 +557,7 @@ void MC::sweep(System &g)
             if (ss > 0)
             { //cout << "drug removed " << endl;
                 drugremoved++;
+                //g.Nd--;
             }
             
             ss = 0;
@@ -783,7 +796,9 @@ int MC::move_one_vertex(System &g, int vid0)
 
 int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with pre_oipen wedge
 {
-    //std::cout << "in attempt_add_monomer-dimer" <<endl;
+    if(debug_sheet==1){
+        std::cout << "in attempt_add_monomer-dimer" <<endl;
+    }
     g.update_normals();
 
     if (g.is_boundary(heid0) < 0)
@@ -791,7 +806,6 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
         std::cout << " cannot add not on the !" << endl;
         std::exit(-1);
     }
-    //double gbb=0;
 
     int etypenew1 = -1;
     int etypenew2 = -1;
@@ -885,7 +899,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
             }*/
-	    etypenew=gsl_rng_uniform_int(rg, 4);
+	        etypenew=gsl_rng_uniform_int(rg, 4);
             double e1 = g.bend_energy(heindex0) + g.bend_energy(xidindex);
             // TYPES BASED ON Concentration
             /*if (gsl_rng_uniform(r) < g.cdProb) {
@@ -951,6 +965,13 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
                 //de += g.gb * 3 - g.mu;
                 //gbb=gb0next+gb0prev;
                 de += gbb - g.mu[etypenew];
+                if(debug_sheet==1){
+                    std::cout << "Binding free energy: " << gbb << ", chemical potential: " << g.mu[etypenew] << ", total: " << gbb - g.mu[etypenew] << std::endl;
+                    if(de<0){
+                        std::cout << "Favorable free energy! Found critical nucleus! Press any button to continue..." << std::endl;
+                        std::cin.get();
+                    }
+                }
                 /*int vinid=g.he[g.heidtoindex[g.Nhelast - 1]].vin;
                     int vindex0=g.vidtoindex[vinid];
                     g.update_neigh_vertex(vinid);
@@ -1122,7 +1143,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
             {
                 etypenew = gsl_rng_uniform_int(r, 4);
             }*/
-	    etypenew=gsl_rng_uniform_int(rg, 4);
+	        etypenew=gsl_rng_uniform_int(rg, 4);
             /* if (gsl_rng_uniform(r) < g.cdProb) {
                     if (gsl_rng_uniform(r) < 0.5) {etypenew=0;}
                     else {etypenew=3; }
@@ -1182,6 +1203,13 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
 
                 //std::cout << " crit is " << crit << endl;
                 de += gbb - g.mu[etypenew];
+                if(debug_sheet==1){
+                    std::cout << "Binding free energy: " << gbb << ", chemical potential: " << g.mu[etypenew] << ", total: " << gbb - g.mu[etypenew] << std::endl;
+                    if(de<0){
+                        std::cout << "Favorable free energy! Found critical nucleus! Press any button to continue..." << std::endl;
+                        std::cin.get();
+                    }
+                }
 
                 /*int vinid=g.he[g.heidtoindex[g.Nhelast - 1]].vin;
                     int vindex0=g.vidtoindex[vinid];
@@ -1298,6 +1326,9 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
     }
     else if (g.v[g.vidtoindex[g.he[heindex0].vin]].hein.size() < 6 && (g.v[g.vidtoindex[g.he[heindex0].vout]].hein.size()) < 6) //adding dimer
     {
+        if(debug_sheet==1){
+            std::cout << "Attempting to add dimer" << std::endl;
+        }
         if (vin0 >= 0 || vid0 >= 0)
         {
             return (-1);
@@ -1402,6 +1433,11 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
         double gbb = g.find_dg(etypeheid0, etypenew1, drug1);
         gbb += g.find_dg(etypenew1, etypenew2, drug2);
         gbb += g.find_dg(etypenew2, etypeheid0, g.he[heindex0].din);
+        if(debug_sheet==1){
+            std::cout << "Binding interface type: " << etypeheid0 << "-" << etypenew1 << ", energy 1: " << g.find_dg(etypeheid0, etypenew1, drug1) << std::endl;
+            std::cout << "Binding interface type: " << etypenew1 << "-" << etypenew2 << ", energy 2: " << g.find_dg(etypenew1, etypenew2, drug2) << std::endl;
+            std::cout << "Binding interface type: " << etypenew2 << "-" << etypeheid0 << ", energy 3: " << g.find_dg(etypenew2, etypeheid0, drug2) << std::endl;
+        }
         //if
         //std::cout << "gbb is  " << gbb <<endl;
         double *dis_vector;
@@ -1432,9 +1468,15 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
         ////std::cout<< "op of edge" << g.Nhelast-2 << " is " << g.he[g.heidtoindex[g.Nhelast-2]].opid<<endl;
         int index2 = g.heidtoindex[g.Nhelast - 2];
         int index4 = g.heidtoindex[g.Nhelast - 4];
-        double de = g.stretch_energy(index2) + g.dimer_bend_energy(index2);
-        de += g.stretch_energy(index4) + g.dimer_bend_energy(index4);
-        de += g.bend_energy(heindex0) + g.dimer_bend_energy(heindex0);
+        double de = 0;
+        if(debug_sheet==1){
+            std::cout << "Total elastic energy: " << g.stretch_energy(index2) + g.dimer_bend_energy(index2) + g.stretch_energy(index4) + g.dimer_bend_energy(index4) + g.bend_energy(heindex0) + g.dimer_bend_energy(heindex0)<< std::endl;
+        }
+        else{
+            de = g.stretch_energy(index2) + g.dimer_bend_energy(index2);
+            de += g.stretch_energy(index4) + g.dimer_bend_energy(index4);
+            de += g.bend_energy(heindex0) + g.dimer_bend_energy(heindex0);
+        }
 
         /* test !!!!
             if (abs(de-(g.compute_energy()-e11)>0.0000000001))  
@@ -1460,8 +1502,24 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
         double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
 
         de += gbb - (g.mu[etypenew1] + g.mu[etypenew2]);
+        if(debug_sheet==1){
+            std::cout << "Total Binding free energy: " << gbb << ", total chemical potential: " << g.mu[etypenew1] + g.mu[etypenew2] << ", total: " << de << std::endl;
+            if(de<0){
+                std::cout << "Favorable free energy! Found critical nucleus! Press any button to continue..." << std::endl;
+                std::cin.get();
+            }
+        }
         delete[] dis_vector;    
-        double crit = 2 * vp * exp(-de / g.T);
+
+        double crit = 0;
+        if (debug_sheet==1){
+            crit = exp(-de / g.T);
+            std::cout << "vp: " << vp << std::endl;
+            std::cout << "log(2vp): " << log(2*vp) << std::endl;
+        }
+        else{
+            crit = 2 * vp * exp(-de / g.T);
+        }
         //std::cout << " crit is " << crit << endl;
         int overlapflag = -1;
         //g.update_index();
@@ -1718,9 +1776,12 @@ int MC::attempt_add_monomer_dimer_drug(System &g, int heid0) //!!! Should update
         ////std::cout<< "op of edge" << g.Nhelast-2 << " is " << g.he[g.heidtoindex[g.Nhelast-2]].opid<<endl;
         int index2 = g.heidtoindex[g.Nhelast - 2];
         int index4 = g.heidtoindex[g.Nhelast - 4];
-        double de = g.stretch_energy(index2) + g.dimer_bend_energy(index2);
-        de += g.stretch_energy(index4) + g.dimer_bend_energy(index4);
-        de += g.bend_energy(heindex0) + g.dimer_bend_energy(heindex0);
+        double de = 0;
+        if(debug_sheet!=1){
+            de = g.stretch_energy(index2) + g.dimer_bend_energy(index2);
+            de += g.stretch_energy(index4) + g.dimer_bend_energy(index4);
+            de += g.bend_energy(heindex0) + g.dimer_bend_energy(heindex0);
+        }
 
         /* test !!!!
             if (abs(de-(g.compute_energy()-e11)>0.0000000001))  
@@ -2042,11 +2103,14 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
             gbb += g.find_dg(opnexttype, opprevtype, g.he[prevopindex0].din);
             gbb += g.find_dg(opprevtype, optype, g.he[heopindex0].din);
-            double de = -(g.stretch_energy(heindex0) + g.stretch_energy(g.heidtoindex[heid_prev_boundary]));
-            de -= g.bend_energy(g.heidtoindex[heid_next_boundary]);
 
-            de -= (g.dimer_bend_energy(heopindex0));
-            de -= (g.dimer_bend_energy(nextopindex0) + g.dimer_bend_energy(prevopindex0));
+            double de = 0;
+            if(debug_sheet!=1){
+                de = -(g.stretch_energy(heindex0) + g.stretch_energy(g.heidtoindex[heid_prev_boundary]));
+                de -= g.bend_energy(g.heidtoindex[heid_next_boundary]);
+                de -= (g.dimer_bend_energy(heopindex0));
+                de -= (g.dimer_bend_energy(nextopindex0) + g.dimer_bend_energy(prevopindex0));
+            }
             //if (yid!=-1) {  de-=g.dimer_bend_energy(heindex0);}
 
             //if (xid!=-1 && g.he[xindex].nextid==heid_prev_boundary) {
@@ -2085,8 +2149,14 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             //std::cout<<x<<endl;
             delete[] tempv1;
             //double vp = 1/(gsl_ran_gaussian_pdf(dis_new, g.gaussian_sigma));
-            double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
-            double crit = exp(-de / g.T) / (2 * vp); 
+            double crit = 0;
+            if (debug_sheet==1){
+                crit = exp(-de / g.T);
+            }
+            else{
+                double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
+                crit = exp(-de / g.T) / (2 * vp); 
+            }
             //std::cout << " crit is " << crit << endl;
             if (gsl_rng_uniform(rg) < crit) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)
             {
@@ -2241,6 +2311,8 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                     std::exit(-1);
                 }
                 g.update_index();
+		//241125 between here and next g.update_index() something is going wrong
+		//Most likely in delete_vertex
                 int x = g.delete_vertex(vi);
                 if (x < 0)
                 {
@@ -2261,7 +2333,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 //gbb=gb0next+gbnextprev+gb0prev;
 
                 //delete[] vco;
-                g.update_index();
+                g.update_index(); //241125 getting segfault here
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
                 {
                     g.update_neigh_vertex(*it);
@@ -4593,7 +4665,9 @@ int MC::attempt_fission(System &g)
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[yid]].boundaryindex " << g.he[g.heidtoindex[yid]].boundary_index<<endl;
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[yidopid]].boundaryindex " << g.he[g.heidtoindex[yidopid]].boundary_index<<endl;
         g.v[g.vidtoindex[newvid_prev]].hein.push_back(yid);
+        std::cout << "cleared vidtoindex" << std::endl;
         yidopid = g.he[g.heidtoindex[yid]].opid;
+        std::cout << "cleared heidtoindex" << std::endl;
         g.he[g.heidtoindex[yid]].vout = newvid_prev;
         g.he[g.heidtoindex[yidopid]].vin = newvid_prev;
         g.update_half_edge(yid);
@@ -4618,8 +4692,10 @@ int MC::attempt_fission(System &g)
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[zid]].boundaryindex " << g.he[g.heidtoindex[zid]].boundary_index<<endl;
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[zidopid]].boundaryindex " << g.he[g.heidtoindex[zidopid]].boundary_index<<endl;
         g.v[g.vidtoindex[newvid_next]].hein.push_back(zidopid);
+        std::cout << "cleared vidtoindex" << std::endl;
 
         g.he[g.heidtoindex[zid]].vin = newvid_next;
+        std::cout << "cleared heidtoindex" << std::endl;
         g.he[g.heidtoindex[zidopid]].vout = newvid_next;
         g.update_half_edge(zid);
         g.update_half_edge(zidopid);
@@ -4631,22 +4707,25 @@ int MC::attempt_fission(System &g)
         }
     }
 
-    //std::cout << "in fission now delete the vertex" <<endl;
+    std::cout << "in fission now delete the vertex" <<endl;
 
     g.delete_vertex(vid0);
+    std::cout << "done" << std::endl;
     //std::cout << "in fission now update boundary" <<endl;
     //g.update_boundary(); should not update the boundary before
     // calculate energy
 
-    //std::cout << "in fission now update index " <<endl;
+    std::cout << "in fission now update index " <<endl;
     ////std::cout << "in fission test vid outs "<<endl;
-    //for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
-    //{
-    //	std::cout << "heid " << it->id << " it->vout " << it->vout <<endl;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+    	std::cout << "heid " << it->id << " it->vout " << it->vout <<endl;
 
-    // }
+     }
 
     g.update_index();
+
+    std::cout << "done updating index" << std::endl;
     //std::cout << "in fission now update normals " <<endl;
     g.update_normals();
 

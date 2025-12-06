@@ -1,0 +1,7 @@
+CAM_high_salt
+Pylauncher v5.3 job, type=ClassicLauncher, starting 2025-12-05 15:53:19
+explicit workdir: <<pylauncher_tmp2619547>>
+explicit workdir: <<pylauncher_tmp2619547>>
+Implementor warning: re-using workdir <</scratch/09029/tg883285/capsid-assembly/HBV_KMC/CAM_high_salt_2025_12_05_15_53_17/pylauncher_tmp2619547>>
+Start launcherjob, launcher version: 5.3
+Using uniform core count 4

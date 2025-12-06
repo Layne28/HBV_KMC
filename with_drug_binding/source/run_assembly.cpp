@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <gsl/gsl_rng.h>
+#include <filesystem>
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
@@ -16,10 +17,10 @@ int main(int argc, char **argv)
     int seconds;
     time(&timer1);
 
-    if (argc != 21)
+    if (argc != 22)
     {
         fprintf(stderr, "%d", argc);
-        fprintf(stderr, "usage: ./assemble seed epsilon0 kappa0 kappaPhi0 theta0 theta1 LnK muCd ks0 dmu dummydg mudrug gdrug kd0 dg12 dg01 dg20 dg33 dg00 dgother\n");
+        fprintf(stderr, "usage: ./assemble seed epsilon0 kappa0 kappaPhi0 theta0 theta1 LnK muCd ks0 dmu dummydg mudrug gdrug kd0 dg12 dg01 dg20 dg33 dg00 dgother subfolder\n");
         exit(-1);
     }
 
@@ -178,12 +179,15 @@ int main(int argc, char **argv)
 
     int ind, e;
 
+    std::string subfolder = argv[21];
+    std::filesystem::create_directories(subfolder);
+
     // set up an output file
     //ofstream *efile, *finalfile, *fi, *paramfile;
     FILE *ofile, *finalfile, *fi, *paramfile;
     g.dump_parameters();
-    ofile = fopen("energy.dat", "a");
-    if (access("energy.dat", F_OK) != -1)
+    ofile = fopen((subfolder + "/energy.dat").c_str(), "a");
+    if (access((subfolder + "/energy.dat").c_str(), F_OK) != -1)
     {
         fprintf(stderr, " log files exist\n");
 
@@ -198,7 +202,7 @@ int main(int argc, char **argv)
                 seed, g.epsilon[0], g.kappa[0], g.theta0[0], g.theta0[1], g.gb0, g.mu[0], g.mu[1], dgother, dg12, dg01, dg20, dg33, dg00, ks0, g.theta0[2], kd0, gdrug0, g.mudrug);
         fclose(paramfile);
     }
-    fi = fopen("parameters_run.out", "a");
+    fi = fopen((subfolder + "/parameters_run.out").c_str(), "a");
     fprintf(fi, "./source/assemble seed epsilon0 kappa0 kappaPhi0 theta0 theta1 LnK muCd ks0 dmu dummydg mudrug gdrug kd0 dg12 dg01 dg20 dg33 dg00 dgother\n");
     //fprintf(fi, "./source/assemble seed epsilon0 kappa0 kappaPhi0 theta0 theta1 LnK muCD ks0 dmu dummydg mudrug gdrug kd0                                 \n");
     fprintf(fi, "./source/assemble %lu %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.6f %.3f %.3f %.3f %.3f %.6f %.3f %.3f %.3f %.3f %.3f %.3f\n",
@@ -258,9 +262,9 @@ int main(int argc, char **argv)
     int wedgefission = 0;
     int boundtri = 0;
 
-    char filename[30] = "restart_lammps.dat";
+    //std::string filename = subfolder + "/restart_lammps.dat";
 
-    sweep = read_restart_lammps_data_file(g, filename);
+    sweep = read_restart_lammps_data_file(g, (subfolder + "/restart_lammps.dat").data());
 
     g.update_boundary();
     g.update_neigh();

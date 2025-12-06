@@ -40,9 +40,9 @@ OPTFLAGS:=$(PROFILE) -O2 -g
 
 # Flags to pass to the linker; -lm links in the standard c math library
 #LDFLAGS:= -fopenmp -lfftw3 -lm -lgsl -lgslcblas -llapack -lblas -larmadillo -lstdc++fs $(PROFILE) -L$(HOME)/.local/lib 
-LDFLAGS:= -Wl,--no-as-needed -lm -lgsl -lgslcblas -lstdc++fs $(PROFILE)
+LDFLAGS:= -Wl,--no-as-needed -lm -L$(HOME)/.local/lib/ -l:libgsl.so.28 -lgslcblas -lstdc++fs $(PROFILE)
 
-LDLIBFLAGS:= -lm -lgsl -lstdc++fs -Wl,--no-as-needed $(PROFILE) -L$(HOME)/.local/lib 
+LDLIBFLAGS:= -lm -L$(HOME)/.local/lib/ -l:libgsl.so.28 -lstdc++fs -Wl,--no-as-needed $(PROFILE) 
 
 # Variable to compose names of object files from the names of sources
 OBJECTS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))

@@ -1,0 +1,60 @@
+#Observer
+output_dir: ./data/smriti_drug_low_salt_debug
+config_freq: 1000
+thermo_freq: 100
+print_freq: 1000
+#print_freq: 1
+
+#Run info
+equil_steps: 1000
+production_steps: 10000000
+info_freq: 10000
+simulation: standard
+debug_sheet: 1
+
+#Monte Carlo parameters
+ks0: 0.02
+kd0: 0.02
+#ks0: 0.0
+#kd0: 10.0
+
+###########################
+#System/Geometry parameters
+###########################
+
+#change epsilon0 -> kappa_l
+epsilon0: 4200
+#change kappa0 -> kappa_phi
+kappa0: 40
+#change kappaPhi0 -> kappa_theta
+kappaPhi0: 800
+
+#Dihedral angles
+theta0: 0.240
+theta1: 0.480
+
+#Dimer-dimer binding affinities
+gb0: -9.85
+dg12: 0.3
+dg01: 0.1
+dg20: -0.1
+dg33: 0.0
+#dg00: 0.0
+dg00: -0.6
+dgother: -0.95
+
+#Chemical potentials
+#muCD is ln(10muM)
+muCD: -11.5
+#dmu controls the conformational
+#free energy difference between AB and CD
+dmu: -5.5
+
+#Drug parameters
+#mudrug is ln(40muM)
+mudrug: -10.1
+#Drug-dimer binding affinity made up for now
+gdrug0: -21.0
+
+
+  

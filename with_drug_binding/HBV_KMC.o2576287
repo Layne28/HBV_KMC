@@ -1,0 +1,9 @@
+farri_T4
+Pylauncher v5.3 job, type=ClassicLauncher, starting 2025-11-22 09:05:37
+explicit workdir: <<pylauncher_tmp2576287>>
+explicit workdir: <<pylauncher_tmp2576287>>
+Implementor warning: re-using workdir <</scratch/09029/tg883285/capsid-assembly/HBV_KMC/farri_T4_2025_11_22_09_05_36/pylauncher_tmp2576287>>
+
+Paramiko could not create ssh client to c520-053.stampede3.tacc.utexas.edu
+
+HostPool creation needs n or list

@@ -1,0 +1,31 @@
+CAM_high_salt_slow
+Pylauncher v5.3 job, type=ClassicLauncher, starting 2025-12-05 15:54:21
+explicit workdir: <<pylauncher_tmp2619558>>
+explicit workdir: <<pylauncher_tmp2619558>>
+Implementor warning: re-using workdir <</scratch/09029/tg883285/capsid-assembly/HBV_KMC/CAM_high_salt_slow_2025_12_05_15_54_20/pylauncher_tmp2619558>>
+Start launcherjob, launcher version: 5.3
+Using uniform core count 4
+Prepating final report
+
+==========================
+Launcher run completed, launcher type: ClassicLauncher
+
+total running time:  55.19
+
+tasks completed: 100
+tasks aborted: 0
+max runningtime:   3.66
+avg runningtime:   3.62
+aggregate      : 361.96
+speedup        :   6.56
+out of ideal   : 112.00
+
+Host pool of size 448.
+
+Number of tasks executed:
+max: 28
+avg: 25.93
+unused cores: 416
+
+==========================
+

@@ -18,6 +18,7 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	Nv5 = 0;
 	Nv6 = 0;
 	Nhe = 0;
+	Nd = 0; //no. of CAMs
 	epsilon = nullptr;
 	kappa = nullptr;
 	kappaPhi = nullptr;
@@ -74,7 +75,7 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 
 	std::cout << mu[0] << " " << mu[1] << " " << mu[2] << " " << mu[3] << std::endl;
 
-	/* GB (dimer-dimer interaction) parameteres */
+	/* GB (dimer-dimer interaction) parameters */
     for (int i = 0; i < Ntype; i++)
     {
         for (int j = 0; j < Ntype; j++)
@@ -159,7 +160,9 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
         for (int j = 0; j < Ntype; j++)
         {
 			if(i==0 && j==0){ //CD-CD
-				gdrug[i][j] = gdrug0-5.88; //LBF added 072125
+				//gdrug[i][j] = gdrug0-5.88; //LBF added 072125
+				//std::cout << -gb[0][0]+gb[3][3] << std::endl;
+				gdrug[i][j] = gdrug0-gb[0][0]+gb[3][3]; //makes DC like CD when drug binds
 			}
 			if(i==3 && j==3){ //DC-DC
 				gdrug[i][j] = gdrug0;
@@ -265,6 +268,11 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	if(theParams.is_key("dg33")) dg33 = std::stod(theParams.get_value("dg33"));
 	if(theParams.is_key("dg00")) dg00 = std::stod(theParams.get_value("dg00"));
 	if(theParams.is_key("dgother")) dgother = std::stod(theParams.get_value("dgother"));
+
+	if(theParams.is_key("lenpoints")) lenpoints = std::stol(theParams.get_value("lenpoints"));
+	std::cout << "lenpoints:" << lenpoints << std::endl;
+
+	if(theParams.is_key("debug_vindex")) debug_vindex = std::stoi(theParams.get_value("debug_vindex"));
 }
 
 
@@ -336,8 +344,8 @@ void System::initialize(int Ntype0)
 
 	xi=0;
 
-	lenpoints=20000000;
-	dist_points = new double *[lenpoints];
+	lenpoints = 20000000;
+	dist_points = new double *[20000000];//[lenpoints];
 
 	for (int i = 0; i < lenpoints; i++)
 	{
@@ -348,8 +356,9 @@ void System::initialize(int Ntype0)
 		}
 	}
 
-	vidtoindex = new int[2000000000];
-	heidtoindex = new int[2000000000];
+	int vhe_points = 2000000000;
+	vidtoindex = new int[vhe_points];//[lenpoints];
+	heidtoindex = new int[vhe_points];//[lenpoints];
 	epsilon = new double[Ntype];
 	kappa = new double[Ntype];
 	kappaPhi = new double[Ntype];
@@ -377,7 +386,9 @@ void System::initialize(int Ntype0)
 		}
 	}
 
-	for (int i = 0; i < 10000000; i++)
+	//for (int i = 0; i < lenpoints; i++)
+	//for (int i = 0; i < 10000000; i++) //241125 is this the culprit?
+	for (int i = 0; i < vhe_points; i++)
 	{
 		vidtoindex[i] = -1;
 		heidtoindex[i] = -1;
@@ -386,6 +397,10 @@ void System::initialize(int Ntype0)
 
 void System::update_index()
 {
+	////////////////////////////////
+	//Clear vertex and half-edge IDs
+	////////////////////////////////
+
 	for (vector<VTX>::iterator it = v.begin(); it != v.end(); ++it)
 	{
 		//it->hesurfinid=-1;
@@ -401,23 +416,54 @@ void System::update_index()
 	{
 		heidtoindex[it->id] = -1;
 	}
+
+	////////////////////////////////
+	//Set new vertex and half-edge IDs
+	////////////////////////////////
+
 	//cout <<"T2" <<endl;
 	for (vector<VTX>::iterator it = v.begin(); it != v.end(); ++it)
 	{
 
 		vidtoindex[it->vid] = distance(v.begin(), it);
+		// if (debug_vindex==1){
+		// 	cout << "vid :" << it->vid << " vindex" <<  distance(v.begin(),it) <<endl;	
+		// }
 		//cout << "vid :" << it->vid << "vindex" <<  distance(v.begin(),it) <<endl;
 	}
 	//cout <<"T3" <<endl;
 	for (vector<HE>::iterator it = he.begin(); it != he.end(); ++it)
 	{
 		heidtoindex[it->id] = distance(he.begin(), it);
-		//cout << "heid :" << it->id << "heindex" <<  distance(he.begin(),it) <<endl;
+		// if (debug_vindex==1){
+		// 	cout << "heid: " << it->id << " heindex" <<  distance(he.begin(),it) <<endl;
+		// }
 	}
 	//cout <<"T4" <<endl;
 	for (vector<HE>::iterator it = he.begin(); it != he.end(); ++it)
 	{
-		v[vidtoindex[it->vout]].hein.push_back(it->id);
+		// std::cout << "TEST..." << std::endl;
+		// std::cout << "it->id: " << it->id << std::endl;
+		// std::cout << "it->vout: " << it->vout << std::endl;
+		// std::cout << "vidtoindex[it->vout]: " << vidtoindex[it->vout] << std::endl;
+		int vout_in_v = 0;
+		for (vector<VTX>::iterator it2 = v.begin(); it2 != v.end(); ++it2){
+			if(it->vout==it2->vid) vout_in_v = 1;
+		}
+		if (vout_in_v==0){
+			std::cout << "WARNING: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+		}
+		/*
+		if (vout_in_v==0){
+			std::cout << "Error: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+			exit(-1);
+		}
+		if (vidtoindex[it->vout]==-1){
+			std::cout << "Error: in update_index()! vidtoindex[vout] is -1!" << std::endl;
+			exit(-1);
+		}
+		*/
+		v[vidtoindex[it->vout]].hein.push_back(it->id); //This line is giving a segfault
 		//if ((is_boundary(it->id))>0 && (is_vboundary(it->vout)>0)) { v[vidtoindex[it->vout]].hesurfinid=it->id; }
 
 		//v[vidtoindex[it->vin]].hein.push_back(*it);
@@ -1189,6 +1235,9 @@ void System::add_vertex(double *xyz)
 {
 	VTX *vtxi;
 	vtxi = new VTX;
+	if (debug_vindex==1){
+		std::cout << "ADDING VERTEX: vid=" << Nvlast << std::endl;
+	}
 	vtxi->vid = Nvlast;
 	vtxi->co[0] = xyz[0];
 	vtxi->co[1] = xyz[1];
@@ -1300,6 +1349,10 @@ void System::add_half_edge_type(int vin0, int vout0, int etype, int b_index)
 	//HE *newheo;
 	newhei = new HE;
 	he.push_back(*newhei);
+	if(vout0==-1){
+		std::cout << "Error: vout index is -1!" << std::endl;
+		exit(-1);
+	}
 	he_initialize(Nhe, Nhelast, vin0, vout0, etype, b_index);
 	Nhe++;
 	Nhelast++;
@@ -1324,6 +1377,10 @@ int System::add_edge_type(int vin0, int vout0, int etype)
 	HE *newheo;
 	newhei = new HE;
 	he.push_back(*newhei);
+	if(vout0==-1){
+		std::cout << "Error: vout index is -1!" << std::endl;
+		exit(-1);
+	}
 	he_initialize(Nhe, Nhelast, vin0, vout0, etype, b_index);
 	//heidtoindex[Nhelast]=Nhe;
 	Nhe++;
@@ -1353,6 +1410,10 @@ int System::add_edge_type(int vin0, int vout0, int etype)
 	}
 	newheo = new HE;
 	he.push_back(*newheo);
+	if(vout0==-1){
+		std::cout << "Error: vout index is -1!" << std::endl;
+		exit(-1);
+	}
 	he_initialize(Nhe, Nhelast, vout0, vin0, optype, b_index);
 	//heidtoindex[Nhelast]=Nhe;
 	Nhe++;
@@ -2221,6 +2282,8 @@ double System::move_p(double *pi, double *pf, gsl_rng *r)
 	
 	return d;
 }
+
+
 double System::move_p_gaussian(double len_v, double *pi, double *pf, gsl_rng *r)
 {
 	double *x;
@@ -3577,9 +3640,16 @@ double System::bend_energy(int heindex0)
 	//cout << "BEND E IS " << bendE <<endl;
 	if (bendE < 0)
 	{
-		cout << "BEND E IS " << bendE << endl;
-		exit(-1);
+		if(abs(bendE)< 1e-12){
+			cout << "WARNING: small negative bending energy. Correcting to zero." << endl;
+			bendE = 0.0;
+		}
+		else{
+			cout << "ERROR: BEND E IS " << bendE << endl;
+			exit(-1);
+		}
 	}
+
 
 	delete[] tempvec;
 

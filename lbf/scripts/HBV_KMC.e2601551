@@ -1,0 +1,2 @@
+cp: cannot stat 'scripts/analysis': No such file or directory
+python: can't open file '/scratch/09029/tg883285/capsid-assembly/HBV_KMC/T4_std_analysis_2025_11_30_13_13_58/scripts/analysis/hbv_cg_traj.py': [Errno 2] No such file or directory
