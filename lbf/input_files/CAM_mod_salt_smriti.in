@@ -13,7 +13,7 @@ stop_early: 1
 
 #Monte Carlo parameters
 ks0: 0.02
-kd0: 0.02
+kd0: 0.000002
 
 ###########################
 #System/Geometry parameters

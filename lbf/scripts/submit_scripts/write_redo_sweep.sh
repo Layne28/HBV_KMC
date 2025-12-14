@@ -34,7 +34,7 @@ for file in "${input_scratch_folder}out"*; do
     mycommand="./hbv_kmc ${filename} $number seeds.txt"
     cmd_list+=("${mycommand}")
     echo "Moving old data to subfolder."
-    myfolder="/scratch/09029/tg883285/capsid-assembly/HBV_KMC/${base_name}/seed=${number}/"
+    myfolder="/scratch0/laynefrechette/capsid-assembly/HBV_KMC/${base_name}/seed=${number}/"
     mkdir -p "${myfolder}/segfault_data"
     mv ${myfolder}/* ${myfolder}/segfault_data/
     #echo "moving ${myfolder}"
@@ -43,7 +43,7 @@ done
 
 #Also go through and check that seed directories exist
 for ((i=1; i < $((nseed+1)); i++)); do
-    myfolder="/scratch/09029/tg883285/capsid-assembly/HBV_KMC/${base_name}/seed=$i/"
+    myfolder="/scratch0/laynefrechette/capsid-assembly/HBV_KMC/${base_name}/seed=$i/"
     if [ ! -d "${myfolder}/prod" ]; then
         echo "Directory '$myfolder' does not exist."
         mycommand="./hbv_kmc ${filename} $i seeds.txt"

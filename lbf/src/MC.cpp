@@ -497,7 +497,23 @@ void MC::sweep(System &g)
                         //if (gsl_rng_uniform(r) < pf_attempt)
                         //{
                         int ff = attempt_fission(g);
+                        //std::cout << "done attempting fission. updating boundary..." << std::endl;
                         g.update_boundary();
+                        /*for (vector<VTX>::iterator it2 = g.v.begin(); it2 != g.v.end(); ++it2){
+                                std::cout << "it2->vid: " << it2->vid << std::endl;
+                        }*/
+                        for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+                        {
+                            //std::cout << "it->vout: " << it->vout << std::endl;
+                            int vout_in_v = 0;
+                            for (vector<VTX>::iterator it2 = g.v.begin(); it2 != g.v.end(); ++it2){
+                                //if(it->vout==776732) std::cout << "check: it->vout: " << it->vout << " it2->vid: " << it2->vid << std::endl;
+                                if(it->vout==it2->vid) vout_in_v = 1;
+                            }
+                            if (vout_in_v==0){
+                                std::cout << "WARNING: after update boundary: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+                            }
+                        }
                         if (ff > 0)
                             fission++;
                         ff = 0;
@@ -572,6 +588,7 @@ void MC::move_vertices(System &g)
 {
     /*** Attempt to move all vertices ***/
     //std::cout << "inin move_vertices"<<endl;
+    if(no_del_vertex_counter>0) std::cout << "moving vertices after not deleting vertex" << std::endl;
     double *newv = new double[3];
     double *oldv = new double[3];
 
@@ -606,6 +623,7 @@ void MC::move_vertices(System &g)
 
         /* move the vertex to coordinates newv */
         g.move_v_epsilon(g.xi, oldv, newv, rg);
+        if(no_del_vertex_counter>0) std::cout << "moved to new coords" << std::endl;
 
         /* update the coordinates of the vertex  */
         g.v[ind].co[0] = newv[0];
@@ -613,9 +631,11 @@ void MC::move_vertices(System &g)
         g.v[ind].co[2] = newv[2];
 
         /* update vertex geometry , normals , excluders */
+        if(no_del_vertex_counter>0) std::cout << "about to update" << std::endl;
         g.update_geometry_vertex(ind);
         g.update_normals_vertex(ind);
         g.update_excluder_top_vertex(ind);
+        if(no_del_vertex_counter>0) std::cout << "done" << std::endl;
 
         //for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
         //{
@@ -627,6 +647,7 @@ void MC::move_vertices(System &g)
         e2 = g.vertex_energy(g.v[ind].vid);
 
         /* check overlap */
+        if(no_del_vertex_counter>0) std::cout << "checking overlap" << std::endl;
         if (g.Nhe > 20)
         {
             if (g.check_overlap_g(g.v[ind].vid) < 0)
@@ -634,6 +655,7 @@ void MC::move_vertices(System &g)
                 overlapflag = 1;
             }
         }
+        if(no_del_vertex_counter>0) std::cout << "done" << std::endl;
 
         de = e2 - e1;
         /* test !!!!*/
@@ -699,13 +721,20 @@ void MC::move_vertices(System &g)
 
     /* after all moves update surface neighbors */
 
+    if(no_del_vertex_counter>0) std::cout << "updating surface neighbors" << std::endl;
     for (vector<int>::iterator it = g.boundaryv.begin(); it != g.boundaryv.end(); ++it)
     {
         g.update_neigh_vertex_and_neigh(*it);
     }
+    if(no_del_vertex_counter>0) std::cout << "done" << std::endl;
 
-    delete[] newv;
-    delete[] oldv;
+    if(no_del_vertex_counter>0){ std::cout << "deleting newv, oldv" << std::endl;
+    std::cout << "newv: " << newv[0] << " " << newv[1] << " " << newv[2] << std::endl;
+    std::cout << "oldv: " << oldv[0] << " " << oldv[1] << " " << oldv[2] << std::endl;
+}
+    //delete[] newv;
+    //delete[] oldv;
+    if(no_del_vertex_counter>0) std::cout << "done" << std::endl;
 }
 
 
@@ -1057,6 +1086,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
                         g.set_prev_next_boundary(xid, nextidboundary0);
                         g.set_prev_next_boundary(previdboundary0, heid0);
                         g.set_prev_next_boundary(heid0, xid);
+                        //std::cout << "updating index after deleting monomer (l 1077)" << std::endl;
                         g.update_index();
                         //std::cout << " MONOMER REMOVED AFTER addition xid1" <<endl;
 
@@ -1295,6 +1325,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
                         g.set_prev_next_boundary(heid0, nextidboundary0);
                         g.set_prev_next_boundary(previdboundary0, xid);
                         g.set_prev_next_boundary(xid, heid0);
+//                        std::cout << "updating index after deleting monomer (l 1316)" << std::endl;
                         g.update_index();
 
                         //std::cout << " MONOMER REMOVED AFTER addition xid2" <<endl;
@@ -1584,6 +1615,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
                 std::exit(-1);
             }
 
+//            std::cout << "updating index after deleting dimer (l 1606)" << std::endl;
             g.update_index();
             if (g.delete_edge(g.Nhelast - 3) < 0)
             {
@@ -1591,12 +1623,14 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
                 std::exit(-1);
             }
 
+//            std::cout << "updating index after deleting dimer pt 2 (l 1614)" << std::endl;
             g.update_index();
 
             if (g.delete_vertex(g.Nvlast - 1) > 0)
             {
                 g.set_prev_next(heid0, -1, -1);
 
+//                std::cout << "updating index after deleting vertex (l 1621)" << std::endl;
                 g.update_index();
                 /* update neigh of vecupdate*/
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
@@ -1877,6 +1911,7 @@ int MC::attempt_add_monomer_dimer_drug(System &g, int heid0) //!!! Should update
                 std::exit(-1);
             }
 
+//            std::cout << "updating index after deleting dimer with drug (l 1902)" << std::endl;
             g.update_index();
             if (g.delete_edge(g.Nhelast - 3) < 0)
             {
@@ -1884,12 +1919,14 @@ int MC::attempt_add_monomer_dimer_drug(System &g, int heid0) //!!! Should update
                 std::exit(-1);
             }
 
+//            std::cout << "updating index after deleting dimer with drug, pt2 (l 1910)" << std::endl;
             g.update_index();
 
             if (g.delete_vertex(g.Nvlast - 1) > 0)
             {
                 g.set_prev_next(heid0, -1, -1);
 
+//                std::cout << "updating index after deleting vertex in dimer with drug (l 1917)" << std::endl;
                 g.update_index();
                 /* update neigh of vecupdate*/
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
@@ -1973,8 +2010,16 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
         //std::cout << " din=1 "<<endl;
         return (-1);
     }                                    // WITH DRUG NO REMOVAL
+    //LBF 12/13/25: Is there a problem here?
+    g.update_boundary();
     int heid_prev_boundary = g.he[nextopindex0].opid; // now back to this side // ToDo this should be previd_boundary
     int heid_next_boundary = g.he[prevopindex0].opid; // after vertex // ToDo this should be nextid_boundary
+    int heid_prev_boundary2 = g.he[heindex0].previd_boundary;
+    int heid_next_boundary2 = g.he[heindex0].nextid_boundary;
+    //std::cout << "compare: " << heid_prev_boundary << " vs " << heid_prev_boundary2 << "; " << heid_next_boundary << " vs " << heid_next_boundary2 << std::endl;
+    //the following lines cause an error in new_vertex_edge
+    //heid_prev_boundary = g.he[heindex0].previd_boundary;
+    //heid_next_boundary = g.he[heindex0].nextid_boundary;
 
     double gbb = 0;
 
@@ -2064,6 +2109,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             //g.set_prev_next(prevopid0, nextopid0, -1);
             //std::cout << "00 monomer removed" <<endl;
             //std::cout << " 004 g.Nd is " <<g.Nd<<endl;
+//            std::cout << "updating index after removing monomer (l 2092)" << std::endl;
             g.update_index();
             g.update_neigh_vertex(vidin);
             g.update_neigh_vertex(vidout);
@@ -2187,6 +2233,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                     std::cout << "!!!" << endl;
                     std::exit(-1);
                 }
+//                std::cout << "updating index after removing dimer (l 2216)" << std::endl;
                 g.update_index();
                 success = g.delete_edge(heid_prev_boundary); // next of op
                 if (success < 0)
@@ -2194,10 +2241,12 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                     std::cout << "!!!" << endl;
                     std::exit(-1);
                 }
+//                std::cout << "updating index after removing dimer, pt 2 (l 2224)" << std::endl;
                 g.update_index();
                 int x = g.delete_vertex(vi);
                 if (x < 0)
                 {
+                    std::cout << "Error deleting vertex" << std::endl;
                     std::exit(-1);
                 }
 
@@ -2207,6 +2256,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 g.set_prev_next_boundary(previdboundary0, prevopid0);
                 //update new edges nex_boundary
 
+//                std::cout << "updating index after removing vertex in remove dimer (l 2238)" << std::endl;
                 g.update_index();
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
                 {
@@ -2237,7 +2287,15 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             {
                 return (-1);
             } //NOREMOVAL DRUG
-            int vi = g.he[heopindex0].vin;
+            
+            int vi = g.he[heopindex0].vin; //this should be the vout of heid0
+            //std::cout << "Check: should be equal: " << vi << " " << g.he[heindex0].vout << std::endl;
+            //Reject moves that attempt to remove dimers with more than one vertex
+            int still_in_vout = check_vid_in_vout(g, vi);
+            if(still_in_vout>2){
+                std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
+                return (-1);
+            }
 
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
@@ -2261,7 +2319,10 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
-            if (isnan(dis_new)) std::exit(-1);
+            if (isnan(dis_new)){
+                std::cout << "error: nan" << std::endl;
+                std::exit(-1);
+            }
             //subvec(tempv1,g.v[g.vidtoindex[vi]].co,dis_vector);
             // dis_new=g.find_project_dist_axes(g.heidtoindex[heidtemp], tempv1, g.v[g.vidtoindex[vi]].co , dis_vector );
             //############# dist remove
@@ -2297,12 +2358,21 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                         vecupdate.push_back(*it);
                     }
                 }
+                /*
+                int still_in_vout = check_vid_in_vout(g, vi);
+                if(still_in_vout>2){
+                    std::cout << "WARNING: about to delete edges with a vertex that has other edges!!" << std::endl;
+                    std::cout << still_in_vout << std::endl;
+                    g.get_obs().dump_lammps_traj_dimers(g, 1000000);
+                }
+                */
                 int success = g.delete_edge(heid0);
                 if (success < 0)
                 {
                     std::cout << "!!!heid_next_boundary-0" << endl;
                     std::exit(-1);
                 }
+//                std::cout << "updating index after removing dimer (l 2335)" << std::endl;
                 g.update_index();
                 success = g.delete_edge(heid_next_boundary); // next of op
                 if (success < 0)
@@ -2310,18 +2380,55 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                     std::cout << "!!!heid_next_boundary-2" << endl;
                     std::exit(-1);
                 }
+                /*
+                still_in_vout = check_vid_in_vout(g, vi);
+                if(still_in_vout>0){
+                    std::cout << "WARNING: about to delete vertex that is still a vout!!" << std::endl;
+                    std::cout << still_in_vout << std::endl;
+                    g.get_obs().dump_lammps_traj_dimers(g, 1000001);
+                }
+                */
+                std::cout << "updating index after removing dimer (l 2343)" << std::endl;
                 g.update_index();
+                std::cout << "checking verts before deleting vertex" << std::endl;
+                check_vout_in_vid(g);
 		//241125 between here and next g.update_index() something is going wrong
-		//Most likely in delete_vertex
-                int x = g.delete_vertex(vi);
-                if (x < 0)
-                {
-                    std::exit(-1);
+		//FIXED: check whether the vertex is still associated with other half edges, if so don't delete it
+		        if(check_vid_in_vout(g,vi)==0){
+                    std::cout << "deleting vertex " << vi << std::endl;
+                    int x = g.delete_vertex(vi);
+                    del_vert_counter++;
+                    std::cout << "Deleted "<< del_vert_counter << " times" << std::endl;
+                    std::cout << "Checking verts on l 2346" << std::endl;
+                    check_vout_in_vid(g);
+                    if (x < 0)
+                    {
+                        std::cout << "error deleting vertex" << std::endl;
+                        std::exit(-1);
+                    }
+                }
+                else{
+                    //Make sure vertex neighbors get updated after deleting intervening edges
+                    std::cout << "updating vertex neighbors after deleting edges" << std::endl;
+                    no_del_vertex_counter++;
+
+                    g.update_geometry_vertex(g.vidtoindex[vi]);
+                    g.update_normals_vertex(g.vidtoindex[vi]);
+                    g.update_excluder_top_vertex(g.vidtoindex[vi]);
+                    g.update_neigh_vertex_and_neigh(vi);
                 }
                 g.set_prev_next(nextopid0, -1, -1); //prev of op
+                //std::cout << "Checking verts on l 2352" << std::endl;
+                //check_vout_in_vid(g);
                 g.he[g.heidtoindex[nextopid0]].boundary_index = bi;
+                //std::cout << "Checking verts on l 2356" << std::endl;
+                //check_vout_in_vid(g);
                 g.set_prev_next_boundary(previdboundary0, nextopid0);
+                //std::cout << "Checking verts on l 2359" << std::endl;
+                //check_vout_in_vid(g);
                 g.set_prev_next_boundary(nextopid0, nextidboundary0);
+                //std::cout << "Checking verts on l 2362" << std::endl;
+                //check_vout_in_vid(g);
                 //update new edges nex_boundary
 
                 //g.update_half_edge(nextopid0);
@@ -2333,6 +2440,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 //gbb=gb0next+gbnextprev+gb0prev;
 
                 //delete[] vco;
+                std::cout << "updating index after deleting vertex in remove dimer (l 2366)" << std::endl;
                 g.update_index(); //241125 getting segfault here
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
                 {
@@ -2616,6 +2724,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                     std::cout << "!!!" << endl;
                     std::exit(-1);
                 }
+//                std::cout << "updating index after removing dimer w drug (l 2650)" << std::endl;
                 g.update_index();
                 success = g.delete_edge(heid_prev_boundary); // next of op
                 if (success < 0)
@@ -2623,10 +2732,12 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                     std::cout << "!!!" << endl;
                     std::exit(-1);
                 }
+//                std::cout << "updating index after removing dimer w drug (l 2658)" << std::endl;
                 g.update_index();
                 int x = g.delete_vertex(vi);
                 if (x < 0)
                 {
+                    std::cout << "error deleting vertex" << std::endl;
                     std::exit(-1);
                 }
 
@@ -2636,6 +2747,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 g.set_prev_next_boundary(previdboundary0, prevopid0);
                 //update new edges nex_boundary
 
+//                std::cout << "updating index after removing vertex in dimer w drug (l 2672)" << std::endl;
                 g.update_index();
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
                 {
@@ -2697,7 +2809,10 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
-            if (isnan(dis_new)) std::exit(-1);
+            if (isnan(dis_new)){
+                std::cout << "error: nan" << std::endl;
+                std::exit(-1);
+            }
             //subvec(tempv1,g.v[g.vidtoindex[vi]].co,dis_vector);
             // dis_new=g.find_project_dist_axes(g.heidtoindex[heidtemp], tempv1, g.v[g.vidtoindex[vi]].co , dis_vector );
             //############# dist remove
@@ -2739,6 +2854,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                     std::cout << "!!!heid_next_boundary-0" << endl;
                     std::exit(-1);
                 }
+//                std::cout << "updating index after removing dimer (l 2776)" << std::endl;
                 g.update_index();
                 success = g.delete_edge(heid_next_boundary); // next of op
                 if (success < 0)
@@ -2746,10 +2862,12 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                     std::cout << "!!!heid_next_boundary-2" << endl;
                     std::exit(-1);
                 }
+//                std::cout << "updating index after removing dimer (l 2784)" << std::endl;
                 g.update_index();
                 int x = g.delete_vertex(vi);
                 if (x < 0)
                 {
+                    std::cout << "error deleting vertex" << std::endl;
                     std::exit(-1);
                 }
                 g.set_prev_next(nextopid0, -1, -1); //prev of op
@@ -2767,6 +2885,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 //gbb=gb0next+gbnextprev+gb0prev;
 
                 //delete[] vco;
+//                std::cout << "updating index after removing vertex in dimer (l 2806)" << std::endl;
                 g.update_index();
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
                 {
@@ -2799,6 +2918,8 @@ int MC::attempt_wedge_fusion(System &g)
 {
     //ToDo : update it to read pairs from a vector of pairs
     //std::cout << "in attempt wedge Fusion  " << endl;
+    
+//    std::cout << "updating index in attempt wedge fusion (l 2839)" << std::endl;
     g.update_index();
 
     g.update_fusion_pairs_he();
@@ -2954,6 +3075,7 @@ int MC::attempt_wedge_fusion(System &g)
     g.add_vertex(newv);
     int newvid = g.Nvlast - 1;
     //update index
+//    std::cout << "updating index after adding vertex in wedge fusion (l 2996)" << std::endl;
     g.update_index(); // work ids after this
     //std::cout << " newvid is " << newvid << " vidtoindex[newvid] is " << g.vidtoindex[newvid] << " Nv is " << g.Nv << endl;
     delete[] tempv;
@@ -3000,6 +3122,7 @@ int MC::attempt_wedge_fusion(System &g)
     }
 
     //std::cout<< " After delete g.Nv " << g.Nv <<endl;
+//    std::cout << "updating index after deleting vertex in wedge fusion (l 3043)" << std::endl;
     g.update_index();
 
     //can do only for those not connected
@@ -3189,6 +3312,7 @@ int MC::attempt_wedge_fusion(System &g)
         //g.update_index();
         //std::cout << "g.Nv " << g.Nv <<endl;
         // std::cout << "fusion not accepted updating index here !!!!!!!!!!!! "<< endl;
+//        std::cout << "updating index after deleting vertex in fusion (l 3233)" << std::endl;
         g.update_index();
 
         for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
@@ -3314,7 +3438,7 @@ int MC::attempt_wedge_fission(System &g)
 
     if (xidnextid == -1)
     {
-        // std::cout << " why xidnextid  is -1" << endl;
+         std::cout << " why xidnextid  is -1" << endl;
         std::exit(-1);
     }
     int xidopidnext = g.he[g.heidtoindex[xidnextid]].opid;
@@ -3502,6 +3626,7 @@ int MC::attempt_wedge_fission(System &g)
 
     int overlapflag = -1;
 
+//    std::cout << "updating index in wedge fission (l 3547)" << std::endl;
     g.update_index();
     //std::cout << "00 indices updated wedge fission" <<endl;
     // update old neighbors
@@ -3623,6 +3748,7 @@ int MC::attempt_wedge_fission(System &g)
         //UPDATE INDICES
 
         //std::cout << "0000 fission" <<endl;
+//        std::cout << "updating index in wedge fission (l 3669" << std::endl;
         g.update_index();
         for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
         {
@@ -4038,6 +4164,7 @@ int MC::attempt_fusion(System &g)
     //std::cout << "in attempt_fusion " << endl;
     //if (is_bond_vboundary(vid0)>0) return -1;
 
+//    std::cout << "updating index in attemtp fusion (l 4085)" << std::endl;
     g.update_index();
     //std::cout << " Starting Fusion g.Nv " << g.Nv << endl;
     g.update_fusion_pairs_he();
@@ -4186,6 +4313,7 @@ int MC::attempt_fusion(System &g)
     g.add_vertex(newv);
     int newvid = g.Nvlast - 1;
     //update index
+//    std::cout << "updating index after add vertex (l 4234)" << std::endl;
     g.update_index(); // work ids after this
     //std::cout << " newvid is " << newvid << " vidtoindex[newvid] is " << g.vidtoindex[newvid] << " Nv is " << g.Nv << endl;
     delete[] tempv;
@@ -4232,6 +4360,7 @@ int MC::attempt_fusion(System &g)
     }
 
     //std::cout<< " After delete g.Nv " << g.Nv <<endl;
+//    std::cout << "updating index after delete vertex (l 4281)" << std::endl;
     g.update_index();
 
     //can do only for those not connected
@@ -4369,7 +4498,7 @@ int MC::attempt_fusion(System &g)
             checkendheid = g.he[g.heidtoindex[checkendheid]].nextid_boundary;
             if (checkendheid == -1)
             {
-                //std::cout << "00 error in fusion updating boundary index " << endl;
+                std::cout << "00 error in fusion updating boundary index " << endl;
                 std::exit(-1);
             }
         }
@@ -4388,7 +4517,7 @@ int MC::attempt_fusion(System &g)
             checkendheid = g.he[g.heidtoindex[checkendheid]].nextid_boundary;
             if (checkendheid == -1)
             {
-                //std::cout << "00 error in other side boundary index " << endl;
+                std::cout << "00 error in other side boundary index " << endl;
                 std::exit(-1);
             }
         }
@@ -4460,6 +4589,7 @@ int MC::attempt_fusion(System &g)
         //g.update_index();
         //std::cout << "g.Nv " << g.Nv <<endl;
         // std::cout << "fusion not accepted updating index here !!!!!!!!!!!! "<< endl;
+//        std::cout << "updating index after delete vertex (l 4510)" << std::endl;
         g.update_index();
 
         for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
@@ -4723,6 +4853,7 @@ int MC::attempt_fission(System &g)
 
      }
 
+//    std::cout << "updating index in wedge fission (l 4774)" << std::endl;
     g.update_index();
 
     std::cout << "done updating index" << std::endl;
@@ -4744,6 +4875,7 @@ int MC::attempt_fission(System &g)
 
     int overlapflag = -1;
     //std::cout << "in fission now update index" <<endl;
+//    std::cout << "updating index in wedge fission (l 4796)" << std::endl;
     g.update_index();
 
     // update old neighbors
@@ -4835,12 +4967,12 @@ int MC::attempt_fission(System &g)
                 vecupdate.push_back(*it);
             }
         }
-        //std::cout << "fission not accepted " << endl; // now move things back to what it was
+        std::cout << "fission not accepted " << endl; // now move things back to what it was
 
         g.add_vertex(vtxi->co);
         //update added neighbors
 
-        //std::cout << "vtxi is added back -- updating indices g.Nvlast " << g.Nvlast  << " g.Nv "<< g.Nv <<endl;
+        std::cout << "vtxi is added back -- updating indices g.Nvlast " << g.Nvlast  << " g.Nv "<< g.Nv <<endl;
 
         int lastindex = g.vidtoindex[g.Nvlast - 1];
 
@@ -4880,6 +5012,7 @@ int MC::attempt_fission(System &g)
         //UPDATE INDICES
 
         //std::cout << "0000 fission" <<endl;
+//        std::cout << "updating index in fission rejection (l 4932)..." << std::endl;
         g.update_index();
         for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
         {
@@ -4895,6 +5028,9 @@ int MC::attempt_fission(System &g)
 
         g.update_neigh_vertex_and_neigh(g.Nvlast - 1);
 
+        std::cout << "done updating index and neigh vertices" << std::endl;
+
+        
         /*
             g.check_odd_neigh();
             
@@ -4911,6 +5047,22 @@ int MC::attempt_fission(System &g)
             } */
         vecupdate.clear();
         delete vtxi;
+
+        //Check that vouts are in vertex id list
+        for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+        {
+            //std::cout << "it->vout: " << it->vout << std::endl;
+            int vout_in_v = 0;
+            for (vector<VTX>::iterator it2 = g.v.begin(); it2 != g.v.end(); ++it2){
+                //std::cout << "it2->vid: " << it2->vid << std::endl;
+                if(it->vout==it2->vid) vout_in_v = 1;
+            }
+            if (vout_in_v==0){
+                std::cout << "WARNING: in fission rejection: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+            }
+        }
+
+
         return 0;
     }
 
@@ -5748,6 +5900,7 @@ int MC::force_add_monomer_with_next(System &g, int heid0, int xid)
                         g.set_prev_next_boundary(xid, nextidboundary0);
                         g.set_prev_next_boundary(previdboundary0, heid0);
                         g.set_prev_next_boundary(heid0, xid);
+//                        std::cout << "updating index (l 5821)" << std::endl;
                         g.update_index();
                         //std::cout << " MONOMER REMOVED AFTER addition xid1" <<endl;
 
@@ -5777,4 +5930,34 @@ int MC::force_add_monomer_with_next(System &g, int heid0, int xid)
         }
     }
     return 0;
+}
+
+int MC::check_vout_in_vid(System &g){
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        //std::cout << "it->vout: " << it->vout << std::endl;
+        int vout_in_v = 0;
+        for (vector<VTX>::iterator it2 = g.v.begin(); it2 != g.v.end(); ++it2){
+            //std::cout << "it2->vid: " << it2->vid << std::endl;
+            if(it->vout==it2->vid) vout_in_v = 1;
+        }
+        if (vout_in_v==0){
+            std::cout << "WARNING: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+            //exit(-1);
+        }
+    }
+}
+
+int MC::check_vid_in_vout(System &g, int vid){
+    int vid_in_vout = 0;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        if(it->vout == vid) vid_in_vout++;
+    }
+    if (vid_in_vout>0){
+        return vid_in_vout;
+    }
+    else{
+        return 0;
+    }
 }

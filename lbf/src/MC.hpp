@@ -47,6 +47,9 @@ public:
     int unbinding = 0;
     int minhe_fission = 50;
 
+    int del_vert_counter = 0;
+    int no_del_vertex_counter = 0;
+
     /*** Random Number Generator ***/    
     gsl_rng *rg;
 
@@ -104,6 +107,8 @@ public:
     void get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2);
     int force_add_monomer_with_next(System &g, int heid0, int xid);
 
+    int check_vout_in_vid(System &g);
+    int check_vid_in_vout(System &g, int vid);
 
 };
 

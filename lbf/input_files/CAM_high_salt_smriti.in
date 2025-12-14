@@ -6,14 +6,14 @@ print_freq: 10000
 
 #Run info
 equil_steps: 100000
-production_steps: 200000000
+production_steps: 20000000
 info_freq: 1000
 simulation: standard
 stop_early: 1
 
 #Monte Carlo parameters
 ks0: 0.02
-kd0: 0.02
+kd0: 0.000002
 
 ###########################
 #System/Geometry parameters

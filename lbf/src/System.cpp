@@ -451,7 +451,7 @@ void System::update_index()
 			if(it->vout==it2->vid) vout_in_v = 1;
 		}
 		if (vout_in_v==0){
-			std::cout << "WARNING: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+			std::cout << "WARNING: in update_index, vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
 		}
 		/*
 		if (vout_in_v==0){
@@ -1311,6 +1311,10 @@ int System::delete_edge(int heid0)
 	int opid0 = he[heindex0].opid;
 	int opindex0 = heidtoindex[opid0]; //opposite edge
 	//cout << "deleting opposite edge id "<< opid0 << " with opindex "<<heidtoindex[opid0]<<endl;
+	
+    //std::cout << "Deleting edges " << heid0 << " and " << opid0 << std::endl;
+    //std::cout << "heid vout: " << he[heindex0].vout << " opid vout: " << he[opindex0].vout << std::endl; 
+	
 
 	if (opindex0 > heindex0)
 	{
@@ -1330,6 +1334,21 @@ int System::delete_edge(int heid0)
 	Nhe--;
 	Nhe--;
 	//cout << " in delete edge Nhe is " << Nhe <<endl;
+	
+    for (vector<HE>::iterator it = he.begin(); it != he.end(); ++it)
+    {
+        //std::cout << "it->vout: " << it->vout << std::endl;
+        int vout_in_v = 0;
+        for (vector<VTX>::iterator it2 = v.begin(); it2 != v.end(); ++it2){
+            //std::cout << "it2->vid: " << it2->vid << std::endl;
+            if(it->vout==it2->vid) vout_in_v = 1;
+        }
+        if (vout_in_v==0){
+            std::cout << "WARNING: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+            //exit(-1);
+        }
+    }
+	
 
 	return 1;
 }
@@ -2542,7 +2561,10 @@ double System::new_vertex_edge_and_move(int heindex0, double *newv, int etnew,gs
 	
 	//cout<< " tempvec" << tempvec[0] <<" " << tempvec[1] <<" " << tempvec[2] <<" " << endl;
 	//cout<< " he[heopindex0].n" << he[heopindex0].n[0] <<" " << he[heopindex0].n[1] <<" " << he[heopindex0].n[2] <<" " << endl;
-	if (he[heopindex0].n[0]==0 && he[heopindex0].n[1]==0 && he[heopindex0].n[2]==0) exit(-1);
+	if (he[heopindex0].n[0]==0 && he[heopindex0].n[1]==0 && he[heopindex0].n[2]==0){
+        std::cout << "error in new_vertex_edge_and_move" << std::endl;
+        exit(-1);
+    }
 	multvec(tempvec,ll*sin(angle)*(1+x[1])/norm(tempvec),fvecy);
 	//cout<< " fvecy" << fvecy[0] <<" " << fvecy[1] <<" " << fvecy[2] <<" " << endl;
 
@@ -2622,7 +2644,10 @@ void System::new_vertex_edge(int heindex0, double *newv, int etnew)
 	
 	//cout<< " tempvec" << tempvec[0] <<" " << tempvec[1] <<" " << tempvec[2] <<" " << endl;
 	//cout<< " he[heopindex0].n" << he[heopindex0].n[0] <<" " << he[heopindex0].n[1] <<" " << he[heopindex0].n[2] <<" " << endl;
-	if (he[heopindex0].n[0]==0 && he[heopindex0].n[1]==0 && he[heopindex0].n[2]==0) exit(-1);
+	if (he[heopindex0].n[0]==0 && he[heopindex0].n[1]==0 && he[heopindex0].n[2]==0){
+        std::cout << "error in new vertex edge" << std::endl;
+        exit(-1);
+    }
 	multvec(tempvec,sin(angle)*l0[et]/norm(tempvec),fvecy);
 	//cout<< " fvecy" << fvecy[0] <<" " << fvecy[1] <<" " << fvecy[2] <<" " << endl;
 
@@ -4739,6 +4764,7 @@ int read_restart_lammps_data_file(System &g, char filename[])
 		int boundarysize = -1;
 		if (x == 0)
 		{
+            std::cout << "error: cannot read reastart file" << std::endl;
 			exit(-1);
 		}
 		int step = atoi(temp0);

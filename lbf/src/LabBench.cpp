@@ -181,7 +181,24 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
                 exit(-1);
             }
         }
+        //LBF check if capsid growth is stalled
+        if (sys.Nhe > minHE_update_neigh && i % (100*avgAddInterval) == 0 && stop_early==1)
+        {
+            if (abs( sys.Nhe - lastNheGrowth)<=4){
+                std::cout << "Assembly is >35 edges and growth has slowed to <2 edges per" << 20*avgAddInterval << ". Stopping." << std::endl;
+                sys.update_boundary();
+                dump_restart_lammps_data_file(sys, i);
+                time(&timer2);
+                seconds = difftime(timer2, timer1);
+                dump_analysis(sys, ofile, i, seed, seconds);
+                exit(-1);
+            }
+            lastNheGrowth = sys.Nhe;
+            lastNhe = sys.Nhe;
+        }
+
         //see if capsid is growing or it is stalled in mixed morphology
+        /*
         if (sys.Nhe > minHE_update_neigh && i % (10*avgAddInterval) == 0)
         {    
             std::cout << "Stalled? Last Nhe: " << lastNhe << " current Nhe: " << sys.Nhe << std::endl;
@@ -225,7 +242,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             }
             lastNhe = sys.Nhe;
         }
-
+        */
+        /*
         if (i == 200000000)
         {
 
@@ -241,6 +259,7 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             dump_analysis(sys, ofile, i, seed, seconds);
             exit(-1);
         }
+        */
 
         //Stop early if you reach T3 or T4
         if (sys.Nhe==240 && sys.NCD_T4_in==60 && stop_early==1){

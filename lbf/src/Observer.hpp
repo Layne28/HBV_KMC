@@ -5,7 +5,13 @@
 
 #include <string>
 #include <iomanip>
-#include <filesystem>
+#if __has_include(<filesystem>)
+    #include <filesystem>
+//#elif __has_include(<experimental/filesystem>)
+#else
+    #include <experimental/filesystem>
+#endif
+//#include <filesystem>
 #include "MC.hpp"
 #include "System.hpp"
 //#include <H5Cpp.h>
@@ -14,7 +20,8 @@
 //#include <highfive/H5DataSet.hpp>
 //#include <highfive/H5DataSpace.hpp>
 
-namespace fs = std::filesystem;
+namespace fs = std::experimental::filesystem;
+//namespace fs = std::filesystem;
 
 class System;
 class MC;

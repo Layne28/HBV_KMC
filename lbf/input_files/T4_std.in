@@ -53,4 +53,4 @@ mudrug: -100.0
 gdrug0: 10.0
 
 #amount of memory used
-lenpoints: 20000000  
+#lenpoints: 20000000  
