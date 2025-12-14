@@ -1,1 +1,0 @@
-./hbv_kmc CAM_mod_salt.in 87 seeds.txt

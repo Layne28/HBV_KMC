@@ -1,2 +1,0 @@
-./hbv_kmc CAM_low_salt.in 54 seeds.txt
-./hbv_kmc CAM_low_salt.in 8 seeds.txt

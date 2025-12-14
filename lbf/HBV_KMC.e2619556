@@ -1,2 +1,0 @@
-cp: cannot stat 'input_files/CAM_low_salt_slow': No such file or directory
-sed: can't read /scratch/09029/tg883285/capsid-assembly/HBV_KMC/CAM_low_salt_slow_2025_12_05_15_54_15/CAM_low_salt_slow.in: No such file or directory
