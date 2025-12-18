@@ -2145,6 +2145,13 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             // int yid=g.he[heindex0].nextid;
             int vi = g.he[heopindex0].vout;
 
+            //Reject moves that attempt to remove dimers with more than one vertex
+            int still_in_vout = check_vid_in_vout(g, vi);
+            if(still_in_vout>2){
+                std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
+                return (-1);
+            }
+
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
             gbb += g.find_dg(opnexttype, opprevtype, g.he[prevopindex0].din);
@@ -2388,18 +2395,18 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                     g.get_obs().dump_lammps_traj_dimers(g, 1000001);
                 }
                 */
-                std::cout << "updating index after removing dimer (l 2343)" << std::endl;
+                //std::cout << "updating index after removing dimer (l 2343)" << std::endl;
                 g.update_index();
-                std::cout << "checking verts before deleting vertex" << std::endl;
+                //std::cout << "checking verts before deleting vertex" << std::endl;
                 check_vout_in_vid(g);
 		//241125 between here and next g.update_index() something is going wrong
 		//FIXED: check whether the vertex is still associated with other half edges, if so don't delete it
 		        if(check_vid_in_vout(g,vi)==0){
-                    std::cout << "deleting vertex " << vi << std::endl;
+                    //std::cout << "deleting vertex " << vi << std::endl;
                     int x = g.delete_vertex(vi);
                     del_vert_counter++;
-                    std::cout << "Deleted "<< del_vert_counter << " times" << std::endl;
-                    std::cout << "Checking verts on l 2346" << std::endl;
+                    //std::cout << "Deleted "<< del_vert_counter << " times" << std::endl;
+                    //std::cout << "Checking verts on l 2346" << std::endl;
                     check_vout_in_vid(g);
                     if (x < 0)
                     {
@@ -2409,7 +2416,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 }
                 else{
                     //Make sure vertex neighbors get updated after deleting intervening edges
-                    std::cout << "updating vertex neighbors after deleting edges" << std::endl;
+                    //std::cout << "updating vertex neighbors after deleting edges" << std::endl;
                     no_del_vertex_counter++;
 
                     g.update_geometry_vertex(g.vidtoindex[vi]);
@@ -2440,7 +2447,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 //gbb=gb0next+gbnextprev+gb0prev;
 
                 //delete[] vco;
-                std::cout << "updating index after deleting vertex in remove dimer (l 2366)" << std::endl;
+                //std::cout << "updating index after deleting vertex in remove dimer (l 2366)" << std::endl;
                 g.update_index(); //241125 getting segfault here
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
                 {
@@ -2645,6 +2652,13 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             // int yid=g.he[heindex0].nextid;
             int vi = g.he[heopindex0].vout;
 
+            //Reject moves that attempt to remove dimers with more than one vertex
+            int still_in_vout = check_vid_in_vout(g, vi);
+            if(still_in_vout>2){
+                std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
+                return (-1);
+            }
+
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
             gbb += g.find_dg(opnexttype, opprevtype, g.he[prevopindex0].din);
@@ -2786,6 +2800,13 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             
              //NOREMOVAL DRUG
             int vi = g.he[heopindex0].vin;
+
+            //Reject moves that attempt to remove dimers with more than one vertex
+            int still_in_vout = check_vid_in_vout(g, vi);
+            if(still_in_vout>2){
+                std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
+                return (-1);
+            }
 
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
@@ -4791,13 +4812,13 @@ int MC::attempt_fission(System &g)
     } //temp test
     while (true)
     {
-        std::cout << "updating vout of yid " << yid << " to " << newvid_prev << endl;
+        //std::cout << "updating vout of yid " << yid << " to " << newvid_prev << endl;
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[yid]].boundaryindex " << g.he[g.heidtoindex[yid]].boundary_index<<endl;
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[yidopid]].boundaryindex " << g.he[g.heidtoindex[yidopid]].boundary_index<<endl;
         g.v[g.vidtoindex[newvid_prev]].hein.push_back(yid);
-        std::cout << "cleared vidtoindex" << std::endl;
+        //std::cout << "cleared vidtoindex" << std::endl;
         yidopid = g.he[g.heidtoindex[yid]].opid;
-        std::cout << "cleared heidtoindex" << std::endl;
+        //std::cout << "cleared heidtoindex" << std::endl;
         g.he[g.heidtoindex[yid]].vout = newvid_prev;
         g.he[g.heidtoindex[yidopid]].vin = newvid_prev;
         g.update_half_edge(yid);
@@ -4818,14 +4839,14 @@ int MC::attempt_fission(System &g)
     {
 
         zidopid = g.he[g.heidtoindex[zid]].opid;
-        std::cout << "updating vout of zidopid " << zidopid << " to " << newvid_next << endl;
+        //std::cout << "updating vout of zidopid " << zidopid << " to " << newvid_next << endl;
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[zid]].boundaryindex " << g.he[g.heidtoindex[zid]].boundary_index<<endl;
         //std::cout << "in fission boundary index:  g.he[g.heidtoindex[zidopid]].boundaryindex " << g.he[g.heidtoindex[zidopid]].boundary_index<<endl;
         g.v[g.vidtoindex[newvid_next]].hein.push_back(zidopid);
-        std::cout << "cleared vidtoindex" << std::endl;
+        //std::cout << "cleared vidtoindex" << std::endl;
 
         g.he[g.heidtoindex[zid]].vin = newvid_next;
-        std::cout << "cleared heidtoindex" << std::endl;
+        //std::cout << "cleared heidtoindex" << std::endl;
         g.he[g.heidtoindex[zidopid]].vout = newvid_next;
         g.update_half_edge(zid);
         g.update_half_edge(zidopid);
@@ -4847,16 +4868,18 @@ int MC::attempt_fission(System &g)
 
     std::cout << "in fission now update index " <<endl;
     ////std::cout << "in fission test vid outs "<<endl;
+    /*
     for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
     {
     	std::cout << "heid " << it->id << " it->vout " << it->vout <<endl;
 
      }
+    */
 
 //    std::cout << "updating index in wedge fission (l 4774)" << std::endl;
     g.update_index();
 
-    std::cout << "done updating index" << std::endl;
+    //std::cout << "done updating index" << std::endl;
     //std::cout << "in fission now update normals " <<endl;
     g.update_normals();
 

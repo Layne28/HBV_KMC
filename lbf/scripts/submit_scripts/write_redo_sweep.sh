@@ -12,14 +12,14 @@ base_name="${filename%.*}"
 nseed=100
 bad_string="Segmentation"
 bad_string2="Aborted"
-bad_string3="core dumped"
+bad_string3="Killed"
 bad_string4="Error"
 
 echo $filename
 
 cmd_list=()
 
-for file in "${input_scratch_folder}out"*; do
+for file in "${input_scratch_folder}HBV_KMC_"*"err"*; do
   #echo "Processing file: $file"
 
   # Get the last line of the file
@@ -27,8 +27,9 @@ for file in "${input_scratch_folder}out"*; do
   if [[ "$last_line" =~ "$bad_string" || "$last_line" == *"$bad_string2"* || "$last_line" == *"$bad_string3"* || "$last_line" == *"$bad_string4"* ]]; then
     echo "Substring '$bad_string' or '$bad_string2' or '$bad_string3' or '$bad_string4' found in the last line of '$file'."
     #number=$(echo "$file" | sed -E 's/.*out([[:digit:]]+)/\1/')
-    myline=$(sed '4q;d' $file)
-    number=$(echo "$myline" | sed -E 's/.*seed=([[:digit:]]+)/\1/')
+    #myline=$(sed '4q;d' $file)
+    number=$(echo "$file" | sed -E 's/.*HBV_KMC_([[:digit:]]+).err/\1/')
+    #number=$(echo  #"${tmp%.err*}"
     #number=$((number + 1))
     echo "seed: $number"
     mycommand="./hbv_kmc ${filename} $number seeds.txt"
@@ -37,6 +38,9 @@ for file in "${input_scratch_folder}out"*; do
     myfolder="/scratch0/laynefrechette/capsid-assembly/HBV_KMC/${base_name}/seed=${number}/"
     mkdir -p "${myfolder}/segfault_data"
     mv ${myfolder}/* ${myfolder}/segfault_data/
+
+    mkdir -p ${input_scratch_folder}/segfault_data/
+    mv ${file} ${input_scratch_folder}/segfault_data/
     #echo "moving ${myfolder}"
   fi
 done

@@ -1,7 +1,7 @@
 #Observer
 output_dir: ./data/CAM_low_salt_slow
 config_freq: 100000
-thermo_freq: 1000
+thermo_freq: 10000
 print_freq: 100000
 
 #Run info

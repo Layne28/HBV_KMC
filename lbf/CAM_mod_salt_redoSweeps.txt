@@ -1,0 +1,3 @@
+./hbv_kmc CAM_mod_salt.in 48 seeds.txt
+./hbv_kmc CAM_mod_salt.in 49 seeds.txt
+./hbv_kmc CAM_mod_salt.in 98 seeds.txt

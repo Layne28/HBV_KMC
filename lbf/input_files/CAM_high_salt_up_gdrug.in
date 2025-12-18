@@ -1,19 +1,19 @@
 #Observer
-output_dir: ./data/CAM_high_salt_slow
-config_freq: 100000
-thermo_freq: 10000
-print_freq: 100000
+output_dir: ./data/CAM_high_salt_up_gdrug
+config_freq: 10000
+thermo_freq: 1000
+print_freq: 10000
 
 #Run info
 equil_steps: 100000
-production_steps: 2000000000
-info_freq: 10000
+production_steps: 200000000
+info_freq: 1000
 simulation: standard
 stop_early: 1
 
 #Monte Carlo parameters
-ks0: 0.002
-kd0: 0.0000002
+ks0: 0.02
+kd0: 0.000002
 
 ###########################
 #System/Geometry parameters
@@ -50,7 +50,7 @@ dmu: -3.5
 #mudrug is ln(40muM)
 mudrug: -10.1
 #Drug-dimer binding affinity made up for now
-gdrug0: -13.0
+gdrug0: -17.0
 
 
   

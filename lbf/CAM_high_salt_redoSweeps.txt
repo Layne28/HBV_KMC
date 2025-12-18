@@ -1,0 +1,5 @@
+./hbv_kmc CAM_high_salt.in 34 seeds.txt
+./hbv_kmc CAM_high_salt.in 38 seeds.txt
+./hbv_kmc CAM_high_salt.in 73 seeds.txt
+./hbv_kmc CAM_high_salt.in 86 seeds.txt
+./hbv_kmc CAM_high_salt.in 95 seeds.txt
