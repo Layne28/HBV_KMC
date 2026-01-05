@@ -14,6 +14,7 @@ bad_string="Segmentation"
 bad_string2="Aborted"
 bad_string3="Killed"
 bad_string4="Error"
+bad_string5="error"
 
 echo $filename
 
@@ -24,7 +25,7 @@ for file in "${input_scratch_folder}HBV_KMC_"*"err"*; do
 
   # Get the last line of the file
   last_line=$(tail -n 1 "$file")
-  if [[ "$last_line" =~ "$bad_string" || "$last_line" == *"$bad_string2"* || "$last_line" == *"$bad_string3"* || "$last_line" == *"$bad_string4"* ]]; then
+  if [[ "$last_line" =~ "$bad_string" || "$last_line" == *"$bad_string2"* || "$last_line" == *"$bad_string3"* || "$last_line" == *"$bad_string4"* || "$last_line" == *"$bad_string5"* ]]; then
     echo "Substring '$bad_string' or '$bad_string2' or '$bad_string3' or '$bad_string4' found in the last line of '$file'."
     #number=$(echo "$file" | sed -E 's/.*out([[:digit:]]+)/\1/')
     #myline=$(sed '4q;d' $file)

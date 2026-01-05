@@ -1,13 +1,13 @@
 #Observer
-output_dir: ./data/low_salt
-config_freq: 10000
-thermo_freq: 200
-print_freq: 10000
+output_dir: ./data/low_salt_high_DC
+config_freq: 100000
+thermo_freq: 1000
+print_freq: 100000
 
 #Run info
 equil_steps: 100000
-production_steps: 200000000
-info_freq: 1000
+production_steps: 2000000000
+info_freq: 10000
 simulation: standard
 stop_early: 1
 

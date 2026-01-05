@@ -496,6 +496,7 @@ void MC::sweep(System &g)
                         //pf_attempt=kf0*.25; //g.Nsurf
                         //if (gsl_rng_uniform(r) < pf_attempt)
                         //{
+                        //std::cout << "Attempting fission" << std::endl;
                         int ff = attempt_fission(g);
                         //std::cout << "done attempting fission. updating boundary..." << std::endl;
                         g.update_boundary();
@@ -1776,7 +1777,7 @@ int MC::attempt_add_monomer_dimer_drug(System &g, int heid0) //!!! Should update
 
         //std::cout << "types " << etype1 <<" " << etype2<<endl;
         //double gbb=g.find_gbb(etypeheid0,etypenew1,etypenew2);
-        drug2 = 1;
+        drug2 = 1; //This is the drug at the solution-phase dimer-dimer interface
         double gbb = g.find_dg(etypeheid0, etypenew1, drug1);
         gbb += g.find_dg(etypenew1, etypenew2, drug2);
         gbb += g.find_dg(etypenew2, etypeheid0, g.he[heindex0].din);
@@ -4659,6 +4660,7 @@ int MC::attempt_fission(System &g)
     if (g.Nboundary < 2)
         return -1;
 
+
     int ind = gsl_rng_uniform_int(rg, g.boundary.size()); //choose a boundary halfedge
     int heid0 = g.boundary[ind];
     int heindex0 = g.heidtoindex[heid0];
@@ -4718,6 +4720,8 @@ int MC::attempt_fission(System &g)
     //break the bond
     g.he[g.heidtoindex[heid_prev]].nextid = -1;
     g.he[g.heidtoindex[heid_next]].previd = -1;
+
+
 
     //Find new next previuos boundary
     /*int nextid_boundary = -1;

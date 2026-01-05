@@ -2612,7 +2612,7 @@ void System::new_vertex_edge(int heindex0, double *newv, int etnew)
 	fvecx = new double[3];
 	fvecy = new double[3];
 
-	int heopindex0 = heidtoindex[he[heindex0].opid];
+	int heopindex0 = heidtoindex[he[heindex0].opid]; //TODO: add a check on this index
 	get_normal(he[heindex0].id);
 	int et = he[heindex0].type;
 	

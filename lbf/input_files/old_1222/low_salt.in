@@ -1,18 +1,18 @@
 #Observer
 output_dir: ./data/low_salt
-config_freq: 10000
-thermo_freq: 200
-print_freq: 10000
+config_freq: 100000
+thermo_freq: 1000
+print_freq: 100000
 
 #Run info
 equil_steps: 100000
-production_steps: 200000000
-info_freq: 1000
+production_steps: 2000000000
+info_freq: 10000
 simulation: standard
 stop_early: 1
 
 #Monte Carlo parameters
-ks0: 0.02
+ks0: 0.002
 kd0: 0.00
 
 ###########################
@@ -36,7 +36,7 @@ dg12: 0.3
 dg01: 0.1
 dg20: -0.1
 dg33: 0.0
-dg00: -0.2
+dg00: -0.6
 dgother: -0.95
 
 #Chemical potentials

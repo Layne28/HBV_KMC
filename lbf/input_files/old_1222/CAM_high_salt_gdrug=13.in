@@ -1,19 +1,20 @@
 #Observer
-output_dir: ./data/low_salt
-config_freq: 10000
-thermo_freq: 200
-print_freq: 10000
+output_dir: ./data/CAM_high_salt_gdrug=13
+config_freq: 100000
+thermo_freq: 1000
+print_freq: 100000
 
 #Run info
 equil_steps: 100000
 production_steps: 200000000
-info_freq: 1000
+info_freq: 10000
 simulation: standard
 stop_early: 1
 
 #Monte Carlo parameters
+#ratio of subunit addition to drug binding consistent w/ experiment
 ks0: 0.02
-kd0: 0.00
+kd0: 0.02
 
 ###########################
 #System/Geometry parameters
@@ -31,12 +32,12 @@ theta0: 0.240
 theta1: 0.480
 
 #Dimer-dimer binding affinities
-gb0: -9.85
+gb0: -9.76
 dg12: 0.3
 dg01: 0.1
 dg20: -0.1
 dg33: 0.0
-dg00: -0.2
+dg00: -0.6
 dgother: -0.95
 
 #Chemical potentials
@@ -44,13 +45,10 @@ dgother: -0.95
 muCD: -11.5
 #dmu controls the conformational
 #free energy difference between AB and CD
-dmu: -5.5
+dmu: -3.5
 
 #Drug parameters
 #mudrug is ln(40muM)
-mudrug: -100.0
-#Drug-dimer binding affinity made up for now
-gdrug0: 0.0
-
-
-  
+mudrug: -10.1
+#Drug-dimer binding affinity taken from experiment
+gdrug0: -13.0  

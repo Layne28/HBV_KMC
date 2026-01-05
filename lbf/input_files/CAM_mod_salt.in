@@ -1,7 +1,7 @@
 #Observer
 output_dir: ./data/CAM_mod_salt
 config_freq: 10000
-thermo_freq: 1000
+thermo_freq: 200
 print_freq: 10000
 
 #Run info
@@ -13,7 +13,7 @@ stop_early: 1
 
 #Monte Carlo parameters
 ks0: 0.02
-kd0: 0.000002
+kd0: 0.00002
 
 ###########################
 #System/Geometry parameters
@@ -36,7 +36,7 @@ dg12: 0.3
 dg01: 0.1
 dg20: -0.1
 dg33: 0.0
-dg00: -0.6
+dg00: -0.4
 dgother: -0.95
 
 #Chemical potentials
@@ -49,8 +49,8 @@ dmu: -4.5
 #Drug parameters
 #mudrug is ln(40muM)
 mudrug: -10.1
-#Drug-dimer binding affinity made up for now
-gdrug0: -15.0
+#Drug-dimer binding affinity taken from experiment
+gdrug0: -13.0
 
 
   

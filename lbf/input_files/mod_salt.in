@@ -1,7 +1,7 @@
 #Observer
 output_dir: ./data/mod_salt
 config_freq: 10000
-thermo_freq: 1000
+thermo_freq: 200
 print_freq: 10000
 
 #Run info
@@ -36,7 +36,7 @@ dg12: 0.3
 dg01: 0.1
 dg20: -0.1
 dg33: 0.0
-dg00: -0.6
+dg00: -0.4
 dgother: -0.95
 
 #Chemical potentials
