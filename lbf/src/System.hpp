@@ -308,6 +308,7 @@ void make_initial_diamond_AB(System &g);
 void make_initial_diamond_CD(System &g);
 void make_initial_diamond_DC(System &g);
 void make_initial_pentamer(System &g);
+void make_initial_diamond_sheet_all_sites_filled(System &g);
 void make_initial_from_file(System &g, std::string filename);
 int check_bind_triangle(System &g);
 void dump_analysis(System &g, FILE *ofile, int sweep, int seed, int seconds);

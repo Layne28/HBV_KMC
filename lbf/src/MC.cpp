@@ -7,6 +7,7 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
     if(theParams.is_key("kd0")) kd0 = std::stod(theParams.get_value("kd0"));
     if(theParams.is_key("do_vertex_only")) do_vertex_only = std::stod(theParams.get_value("do_vertex_only"));
     if(theParams.is_key("debug_sheet")) debug_sheet = std::stoi(theParams.get_value("debug_sheet"));
+    if(theParams.is_key("debug_dimer_drug_removal")) debug_dimer_drug_removal = std::stoi(theParams.get_value("debug_dimer_drug_removal"));
 
     //***Set RNG***
     rg = the_rg;
@@ -1978,7 +1979,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
     //int heid0type=g.he[heindex0].type;
     if ((g.he[heindex0].nextid != -1) || (g.he[heindex0].previd != -1))
     {
-        //std::cout << " has next or previous cannot remove" << endl;
+        if(debug_dimer_drug_removal==1) std::cout << " has next or previous cannot remove" << endl;
         return -1;
     }
 
@@ -2006,9 +2007,18 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
     int opnexttype = g.he[nextopindex0].type;
     int opprevtype = g.he[prevopindex0].type;
 
+    if(debug_dimer_drug_removal==1){
+        std::cout << "are drugs bound?" << std::endl;
+        for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++){
+    
+            std::cout << it->din << std::endl;
+        }
+    } 
+
     if ((g.he[heindex0].din == 1) || g.he[heopindex0].din == 1)
     {
         //std::cout << " din=1 "<<endl;
+        if(debug_dimer_drug_removal==1) std::cout << "Drug bound to one of edge's half edges. Skipping." << std::endl;
         return (-1);
     }                                    // WITH DRUG NO REMOVAL
     //LBF 12/13/25: Is there a problem here?
@@ -2033,8 +2043,14 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
     {                                                                                                                               //delete monomer
         //std::cout << "in deleting monomer" <<endl;
         //if (g.is_vboundary(g.he[g.heidtoindex[nextopid0]].vout) > 0) { std::cout << "v on boundary wrong geometry!"<<endl; std::exit(-1);}
+        
+        
+
+        //TODO: I think this needs to be changed. This excludes the possibility of 
+        //removing a monomer that is opposite a CAM
         if ((g.he[nextopindex0].din == 1) || g.he[prevopindex0].din == 1)
         {
+            if(debug_dimer_drug_removal==1) std::cout << "Drug bound to next op or prev op. Skipping" << std::endl;
             return (-1);
         }
 
@@ -2140,6 +2156,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             //std::cout << "00 remove dimer with next (previd_boundary) "<<endl;  //remove this and previd_boundary=heid_prev_boundary
             if (g.he[heindex_prev_boundary].din == 1 || g.he[nextopindex0].din == 1)
             {
+            if(debug_dimer_drug_removal==1) std::cout << "Drug bound to prev boundary or next op. Skipping" << std::endl;
                 return (-1);
             } //NOREMOVAL DRUG
 
@@ -2490,7 +2507,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
     //int heid0type=g.he[heindex0].type;
     if ((g.he[heindex0].nextid != -1) || (g.he[heindex0].previd != -1))
     {
-        //std::cout << " has next or previous cannot remove" << endl;
+        if(debug_dimer_drug_removal==1) std::cout << " has next or previous cannot remove" << endl;
         return -1;
     }
 
@@ -2518,8 +2535,11 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
     int opnexttype = g.he[nextopindex0].type;
     int opprevtype = g.he[prevopindex0].type;
 
+   
+    //There should never be drugs on boundary indices anyway, so this check is not strictly necessary
     if ((g.he[heindex0].din == 1))
     {
+        if(debug_dimer_drug_removal==1) std::cout << "WARNING: Drug on a boundary half edge!!!. Skipping" << std::endl;
         //std::cout << " din=1 "<<endl;
         return (-1);
     }                                    // WITH DRUG NO REMOVAL
@@ -2528,121 +2548,56 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
 
     double gbb = 0;
 
-    // remove monomer
+    // Never remove monomer
     // first try remove monomer, if the edge is not a wedge, remove dimer
     if (g.is_boundary(heid_prev_boundary) < 0 && g.is_boundary(heid_next_boundary) < 0)
     {
      if ((g.is_vboundary(g.he[nextopindex0].vout) < 0 || g.Nboundary != 1) && \
        (g.v[g.vidtoindex[g.he[heindex0].vout]].doubleboundary==-1 && g.v[g.vidtoindex[g.he[heindex0].vin]].doubleboundary==-1 ) )// if Nboundary>0 allow for double boundary;
-    {                                                                                                                               //delete monomer
+        {                                                                                                                               //delete monomer
+        if(debug_dimer_drug_removal==1) std::cout << "Rejecting move, edge is a wedge" << std::endl;
         return -1;                                                                                                                               //delete monomer
-        //std::cout << "in deleting monomer" <<endl;
-        //if (g.is_vboundary(g.he[g.heidtoindex[nextopid0]].vout) > 0) { std::cout << "v on boundary wrong geometry!"<<endl; std::exit(-1);}
-        /*if ((g.he[nextopindex0].din == 1) || g.he[prevopindex0].din == 1)
-        {
-            return (-1);
         }
-
-        double de = -(g.stretch_energy(heindex0));
-        int nextboundary0 = g.he[heindex0].nextid_boundary;
-        int prevboundary0 = g.he[heindex0].previd_boundary;
-        //if (g.he[heindex0].previd!=-1) { de-=g.dimer_bend_energy(g.get_heindex(g.he[heindex0].previd)); }
-        //if (g.he[heindex0].nextid!=-1) {de-=g.dimer_bend_energy(heindex0); }
-        de -= (g.dimer_bend_energy(heopindex0) + g.dimer_bend_energy(prevopindex0));
-        //de -= g.bend_energy(nextopindex0) + g.bend_energy(prevopindex0); //g.monomer_energy(heid0);
-
-        gbb += g.find_dg(opprevtype, optype, g.he[heopindex0].din);
-        gbb += g.find_dg(optype, opnexttype, g.he[nextopindex0].din);
-
-        de -= (gbb - g.mu[g.he[heindex0].type]);
-        double crit = 2 * exp(-de / g.T); ///(2.0*g.z*g.K*g.K*g.K);
-
-        if (g.Test_assembly == 1)
-        {
-            std::cout << "crit is " << crit << endl;
-            crit = 1;
-        }
-        if (gsl_rng_uniform(r) < crit)
-        {
-            //g.Nd-=g.he[heopindex0].din;
-            //g.Nd-=g.he[heindex0].din;
-            //std::cout << "REMOVING MONOMER two drugs removed " << g.he[heopindex0].din + g.he[heindex0].din <<endl;
-
-            //std::cout << "de is" <<de <<endl;
-            //std::cout << "crit is  " << crit <<endl;
-            //if ( g.he[heindex0].previd!=-1) {g.he[g.get_heindex(g.he[heindex0].previd)].nextid=-1;}
-            //if (g.he[heindex0].nextid!=-1) {g.he[g.get_heindex(g.he[heindex0].nextid)].previd=-1; }
-            //std::cout << "g.he[heopindex0].previ " << g.he[heopindex0].previd <<endl;
-            //std::cout << "g.he[prevopindex0].nextid " << g.he[prevopindex0].nextid <<endl;
-            //std::cout << "g.he[heopindex0].nextid " << g.he[heopindex0].nextid <<endl;
-            //std::cout << "g.he[nextopindex0].previd" << g.he[nextopindex0].previd <<endl;
-            if (g.he[heopindex0].previd != -1)
-            {
-                g.he[prevopindex0].nextid = -1;
-            }
-            if (g.he[heopindex0].nextid != -1)
-            {
-                g.he[nextopindex0].previd = -1;
-            }
-
-            //ToDo -> Done
-            //update new edges boundary index
-            //update new edges nex_boundary
-            g.he[nextopindex0].boundary_index = bi;
-            g.he[prevopindex0].boundary_index = bi;
-
-            g.set_prev_next_boundary(nextopid0, prevopid0);
-            g.set_prev_next_boundary(prevboundary0, nextopid0);
-            g.set_prev_next_boundary(prevopid0, nextboundary0);
-
-            if (g.is_vboundary(g.he[nextopindex0].vout) > 0)
-                g.v[g.vidtoindex[g.he[nextopindex0].vout]].doubleboundary = 1;
-
-            int vidin = g.he[heindex0].vin;
-            int vidout = g.he[heindex0].vout;
-
-            int x = g.delete_edge(heid0);
-            //g.update_edge();_
-
-            if (x < 0)
-            {
-                std::cout << "could not delete " << endl;
-                std::exit(-1);
-            }
-            //
-
-            //g.set_prev_next(nextopid0, -1, prevopid0);
-            //g.set_prev_next(prevopid0, nextopid0, -1);
-            //std::cout << "00 monomer removed" <<endl;
-            //std::cout << " 004 g.Nd is " <<g.Nd<<endl;
-            g.update_index();
-            g.update_neigh_vertex(vidin);
-            g.update_neigh_vertex(vidout);
-
-            //std::cout << " 005 g.Nd is " <<g.Nd<<endl;
-
-            return 1;
-        }
-        else
-        {
-            //std::cout << " remove monomer not accepted  " << endl;
-            //g.add_monomer(nextopid0, prevopid0,optype);
-
-            return -1;
-        }*/
     }
-    }
-            else // edge is not wedge so remove dimer //with previous or next
+    else // edge is not wedge so remove dimer //with previous or next
     {
+
 
         int heindex_prev_boundary = g.heidtoindex[heid_prev_boundary];
         int heindex_next_boundary = g.heidtoindex[heid_next_boundary];
+
+
+        if(debug_dimer_drug_removal==1) std::cout << "check in dimer removal: " << g.is_boundary(heid_prev_boundary) << " " << g.he[heindex_prev_boundary].previd << " " << heid_prev_boundary << std::endl;
         //double *vco=new double[3];
         //remove dimer
         if (g.is_boundary(heid_prev_boundary) > 0 && g.he[heindex_prev_boundary].previd == -1 && g.v[g.vidtoindex[g.he[heindex0].vin]].doubleboundary==-1) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)  there should be nno bonds between this and previous
         {
+
+            if(debug_dimer_drug_removal==1) std::cout << "In dimer removal" << std::endl;
+            
             //std::cout << "00 remove dimer with next (previd_boundary) "<<endl;  //remove this and previd_boundary=heid_prev_boundary
-            if (g.he[g.heidtoindex[nextopid0]].din == 1 )
+            
+            //Reject attempt if there are drugs bound to other interfaces
+            //Check if previous of opposite edge has drug
+            prevopindex0 = g.heidtoindex[prevopid0];
+            if(g.he[prevopindex0].din==1){
+                if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
+                return -1;
+            }
+            //Check if opposite of previous boundary edge has drug
+            int opprevboundindex0 = g.heidtoindex[g.he[heindex_prev_boundary].opid];
+            if(g.he[opprevboundindex0].din==1){
+                if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
+                return -1;
+            }
+
+
+            //LBF: correcting this 2/16/26
+            //Should be opposite of next boundary edge
+            //if (g.he[heopindex0].din == 1) //Checking that this interface has drug bound
+            int opnextboundindex0 = g.heidtoindex[g.he[heindex_next_boundary].opid];
+            //if (g.he[g.heidtoindex[nextopid0]].din == 1 ) //Checks that drug is bound at interface
+            if (g.he[heopindex0].din==1) //Checks that drug is bound at interface
             {
             if (g.he[heindex0].type == 0 || g.he[heindex0].type==3)
             {
@@ -2709,7 +2664,10 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             //double vp = 1/(gsl_ran_gaussian_pdf(dis_new, g.gaussian_sigma));
             double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
             double crit = exp(-de / g.T) / (2 * vp); 
-            //std::cout << " crit is " << crit << endl;
+            if(debug_dimer_drug_removal==1) {
+                crit = 1;
+                std::cout << " crit is " << crit << endl;
+            }
             if (gsl_rng_uniform(rg) < crit) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)
             {
                 int nextidboundary0 = g.he[g.heidtoindex[heid0]].nextid_boundary;
@@ -2731,7 +2689,8 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 g.Nd-=g.he[heindex_prev_boundary].din;
                 g.Nd-=g.he[nextopindex0].din;
 
-                //std::cout << "REMOVING DIMER four drugs removed " << g.he[heopindex0].din + g.he[heindex0].din +  g.he[heindex_prev_boundary].din + g.he[nextopindex0].din<<endl;
+                //LBF: check this again
+                if(debug_dimer_drug_removal==1) std::cout << "REMOVING DIMER four drugs removed " << g.he[heopindex0].din + g.he[heindex0].din +  g.he[heindex_prev_boundary].din + g.he[nextopindex0].din<<endl;
                 //std::cout << "removing heid0 and heid_prev_boundary " << heid0 <<" " << heid_prev_boundary <<endl;
                 int success = g.delete_edge(heid0);
                 if (success < 0)
@@ -2792,14 +2751,30 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             //std::cout << "00 remove dimer with previous (heid_next_boundary) "<<endl; //with opid_boundary=heid_next_boundary
             //if (g.he[g.heidtoindex[heid_next_boundary]].din==1) return -1;
             //if (g.he[heindex_next_boundary].din==1 || g.he[g.heidtoindex[prevopid0]].din==1 ) { return(-1);} //WITHDRUG no removal
-            if (g.he[heopindex0].din == 1)
+            
+            //Reject attempt if there are drugs bound to other interfaces
+            //Check if opposite edge has drug bound 
+            if(g.he[heopindex0].din==1){
+                if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
+                return -1;
+            }
+            //Check if next of opposite edge has drug bound
+            if(g.he[nextopindex0].din==1){
+                if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
+                return -1;
+            }
+
+            //LBF: correcting this 2/16/26
+            //Should be opposite of next boundary edge
+            //if (g.he[heopindex0].din == 1) //Checking that this interface has drug bound
+            int opnextboundindex0 = g.heidtoindex[g.he[heindex_next_boundary].opid];
+            if (g.he[opnextboundindex0].din==1)
             {
             if (g.he[heindex0].type == 0 || g.he[heindex0].type==3)
             {
             if(g.he[heindex_next_boundary].type==0 || g.he[heindex_next_boundary].type==3)
             {
             
-             //NOREMOVAL DRUG
             int vi = g.he[heopindex0].vin;
 
             //Reject moves that attempt to remove dimers with more than one vertex
@@ -2851,7 +2826,10 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
 
             double crit = exp(-de / g.T) / (2 * vp);
             //delete[] dis_vector;
-            //std::cout << " crit is " << crit << endl;
+            if(debug_dimer_drug_removal==1) {
+                crit = 1;
+                std::cout << " crit is " << crit << endl;
+            }            
             if (gsl_rng_uniform(rg) < crit)
             {
                 //std::cout << " 008 g.Nd is " <<g.Nd<<endl;
@@ -2861,7 +2839,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 g.Nd-=g.he[heopindex0].din;
                 g.Nd-=g.he[heindex_next_boundary].din;
                 g.Nd-=g.he[prevopindex0].din;
-                //std::cout << "REMOVING DIMER four drugs removed " << g.he[heopindex0].din + g.he[heindex0].din +  g.he[heindex_next_boundary].din + g.he[prevopindex0].din<<endl;
+                if(debug_dimer_drug_removal==1) std::cout << "REMOVING DIMER four drugs removed " << g.he[heopindex0].din + g.he[heindex0].din +  g.he[heindex_next_boundary].din + g.he[prevopindex0].din<<endl;
                 vector<int> vecupdate;
                 if (g.v[g.vidtoindex[vi]].vneigh.size() > 0)
                 {
@@ -2923,7 +2901,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             }
             else
             { //removel not succesful
-                //std::cout << "00 remove dimer with previous not accepted"<<endl;
+                if(debug_dimer_drug_removal==1) std::cout << "00 remove dimer with previous not accepted"<<endl;
                 return 0;
             }
         }
@@ -2933,6 +2911,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
         //delete[] vco;
     }
 
+    if(debug_dimer_drug_removal==1) std::cout << "No other errors, just rejecting" << std::endl;
     return -1;
 }
 

@@ -10,9 +10,11 @@ import os
 #os.environ['OPENBLAS_NUM_THREADS'] = '1'
 import pickle
 
-num_pad = 100
+do_pad = 0
+do_add_ads = 0
 
-def get_counts(msm, MM, trajfile, maxsweep, do_pad, do_add_abs):
+
+def get_counts(msm, MM, trajfile, maxsweep):
 
     #maxsweep is the max trajectory length
     #if trajectory file stops earlier than this
@@ -45,34 +47,37 @@ def get_counts(msm, MM, trajfile, maxsweep, do_pad, do_add_abs):
         print('WARNING: lag time is less than separation between frames. Setting lag time to separation between frames, %f.' % delta_t)
         lag = 1
     for traj in trajs:
-        #Trajectories that end in T=4 or T=3 are stopped early.
-        #To ensure that the MSM reflects the effectively irreversible
-        #formation of these structures, "pad" these trajectories 
-        if do_pad==1:
-            if traj[-1] == 'ndimer=120_nCD=60':
-                for i in range(num_pad):
-                    traj.append('ndimer=120_nCD=60')
-            if traj[-1] == 'ndimer=90_nCD=0':
-                for i in range(num_pad):
-                    traj.append('ndimer=90_nCD=0')
         #to prevent degenerate eigenvectors,
         #add initial state to end of trajectories that end
         #in absorbing state other than T4
-        if do_add_abs==1 and traj[-1] != 'ndimer=120_nCD=60':
+        if do_add_ads==1 and traj[-1] != 'ndimer=120_nCD=60' and traj[-1] != 'ndimer=3_nCD=0':
             traj.append('ndimer=3_nCD=0')
-        for i in range(len(traj)-lag):
-            a = MM.state_to_index(traj[i])
-            b = MM.state_to_index(traj[i+lag])
-            msm.add_count(a,b,1)
-        sfinal = MM.state_to_index(traj[-1])
-        #for i in range(len(traj)-lag,len(traj)):
-        #    print(i)
-        #    print(len(traj))
-        #    print(traj[i])
-        #    a = MM.state_to_index(traj[i])
-        #    msm.add_count(a,sfinal)   
-        #    print('added %s to %s count at step %d' % (traj[i], traj[-1], i))
-             
+        if len(traj)>lag:
+            for i in range(len(traj)-lag):
+                a = MM.state_to_index(traj[i])
+                b = MM.state_to_index(traj[i+lag])
+                msm.add_count(a,b,1)
+            sfinal = MM.state_to_index(traj[-1])
+            for i in range(len(traj)-lag,len(traj)):
+                print(i)
+                print(len(traj))
+                print(traj[i])
+                a = MM.state_to_index(traj[i])
+                msm.add_count(a,sfinal)   
+                print('added %s to %s count at step %d' % (traj[i], traj[-1], i))
+            if do_pad==1:
+                print('adding %d counts from %s to %s' % (int((maxframe-len(traj)-lag)), traj[-1], traj[-1]))
+                msm.add_count(sfinal,sfinal,counts=int((maxframe-len(traj)-lag)))
+        else:
+            #If lag time is greater than trajectory length
+            if do_pad==1:
+                sfinal = MM.state_to_index(traj[-1])
+                for i in range(len(traj)):
+                    a = MM.state_to_index(traj[i])
+                    msm.add_count(a,sfinal)
+                msm.add_count(sfinal,sfinal,counts=int((maxframe-len(traj)-lag)))
+            
+    
     return
 
 
@@ -87,11 +92,9 @@ def main():
     #ndrug_int = int(sys.argv[4])
     #tau = float(sys.argv[5]) #lag time
     tau = float(sys.argv[2]) #lag time
-    do_pad = int(sys.argv[3]) #pad T=3, T=4 trajectories
-    do_add_abs = int(sys.argv[4]) #add absorbing state to end of non-T=4 trajectories
 
     #check if already exists
-    out_file = cg_traj_folder + '/msm_do_pad=%d_do_add_abs=%d_tau=%f.pkl' % (do_pad, do_add_abs, tau)
+    out_file = cg_traj_folder + '/msm_do_pad=%d_do_add_ads=%d_tau=%f.pkl' % (do_pad, do_add_ads, tau)
     if os.path.isfile(out_file):
         print('MSM file already exists. Exiting.')
         return
@@ -104,7 +107,6 @@ def main():
     state_list = []
     subfolders = [e for e in os.listdir(cg_traj_folder) if e.startswith('seed')]
     nseeds = len(subfolders)
-    print('num seeds:', nseeds)
     #Need to "pad" trajectories shorter than the max trajectory length
     maxsweep = 0
     skip_seeds = []
@@ -154,7 +156,7 @@ def main():
         #cg_traj_file = cg_traj_folder + '/seed-%d/cg_traj.txt' % (i+1)
         print(cg_traj_file)
         if os.path.exists(cg_traj_file) and (i+1) not in skip_seeds:
-            get_counts(msm, MM, cg_traj_file, maxsweep, do_pad, do_add_abs)
+            get_counts(msm, MM, cg_traj_file, maxsweep)
 
     #the count matrix is built. Now we finalize it to construct the transition matrices
     msm.finalize_counts(MM)
@@ -208,7 +210,7 @@ def main():
     # plt.show()
     
     #Save MSM to file
-    pickle_file = cg_traj_folder + '/msm_do_pad=%d_do_add_abs=%d_tau=%f.pkl' % (do_pad, do_add_abs, msm.get_lag())
+    pickle_file = cg_traj_folder + '/msm_do_pad=%d_do_add_ads=%d_tau=%f.pkl' % (do_pad, do_add_ads, msm.get_lag())
     with open(pickle_file, 'wb') as f:
         pickle.dump(msm, f)
 

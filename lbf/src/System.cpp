@@ -344,8 +344,8 @@ void System::initialize(int Ntype0)
 
 	xi=0;
 
-	lenpoints = 20000000;
-	dist_points = new double *[20000000];//[lenpoints];
+	//lenpoints = 20000000;
+	dist_points = new double *[lenpoints];
 
 	for (int i = 0; i < lenpoints; i++)
 	{
@@ -356,7 +356,7 @@ void System::initialize(int Ntype0)
 		}
 	}
 
-	int vhe_points = 2000000000;
+	int vhe_points = 100*lenpoints;//2000000000;
 	vidtoindex = new int[vhe_points];//[lenpoints];
 	heidtoindex = new int[vhe_points];//[lenpoints];
 	epsilon = new double[Ntype];
@@ -2612,6 +2612,9 @@ void System::new_vertex_edge(int heindex0, double *newv, int etnew)
 	fvecx = new double[3];
 	fvecy = new double[3];
 
+    //LBF 02/05/26: I think this is getting an invalid heopindex0, causing
+    //the normal vector to be zero
+    //OR he[heopindex0] is messed up by some previous move (fission?)  
 	int heopindex0 = heidtoindex[he[heindex0].opid]; //TODO: add a check on this index
 	get_normal(he[heindex0].id);
 	int et = he[heindex0].type;
@@ -5442,6 +5445,174 @@ void make_initial_diamond_DC(System &g)
 		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
 		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
 	}
+	//exit(1);	
+}
+
+void make_initial_diamond_sheet_all_sites_filled(System &g)
+{
+	//Create vertices
+	double xyz0[3];
+	xyz0[0] = 0;
+	xyz0[1] = 0;
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+	for (int i = 1; i < 3; i++)
+	{
+		xyz0[0] = cos(i * M_PI / 3);
+		xyz0[1] = sin(i * M_PI / 3);
+		xyz0[2] = 0;
+    	g.add_vertex(xyz0);
+	}
+	//Last vertex creates a diamond
+	xyz0[0] = 0;
+	xyz0[1] = 2*sin(M_PI/3);
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+	//Here, the first two arguments are the vertex indices
+	//The third argument is the dimer type (0=CD,1=BA,2=AB,3=DC)
+	//The last argument says whether this half edge is on the boundary or not
+	//First CD
+	g.add_half_edge_type(g.v[0].vid, g.v[1].vid, 0, -1); 
+	g.add_half_edge_type(g.v[1].vid, g.v[0].vid, 3, 0); //boundary
+	//Middle CD
+	g.add_half_edge_type(g.v[1].vid, g.v[2].vid, 0, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[1].vid, 3, -1);
+	//Second CD
+	g.add_half_edge_type(g.v[2].vid, g.v[0].vid, 0, -1);
+	g.add_half_edge_type(g.v[0].vid, g.v[2].vid, 3, 0); //boundary
+	//Second CD
+	g.add_half_edge_type(g.v[1].vid, g.v[3].vid, 3, -1);
+	g.add_half_edge_type(g.v[3].vid, g.v[1].vid, 0, 0); //boundary
+	//Third CD
+	g.add_half_edge_type(g.v[3].vid, g.v[2].vid, 3, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[3].vid, 0, 0); //boundary
+
+	//Set indices determining half edge connectivity
+	g.set_prev_next(g.he[0].id, g.he[4].id, g.he[2].id); //CD-CD-CD
+	g.set_prev_next(g.he[2].id, g.he[0].id, g.he[4].id); //CD-CD-CD
+	g.set_prev_next(g.he[4].id, g.he[2].id, g.he[0].id); //CD-CD-CD
+	g.set_prev_next(g.he[6].id, g.he[3].id, g.he[8].id); //CD-CD-CD
+	g.set_prev_next(g.he[8].id, g.he[6].id, g.he[3].id); //CD-CD-CD
+	g.set_prev_next(g.he[3].id, g.he[8].id, g.he[6].id); //CD-CD-CD
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	g.update_boundary();
+	std:: cout << "AFTER update_boundary:" << std::endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+
+    //Add drugs
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++){
+    
+        if (!(g.is_boundary(it->id) > 0)){
+            it->din = 1;
+            g.Nd++;
+            std::cout << "test: " << it->din << std::endl;
+        }
+        g.update_half_edge(it->id);
+    }
+	//exit(1);	
+}
+
+void make_initial_diamond_sheet_all_sites_filled_but_one(System &g)
+{
+	//Create vertices
+	double xyz0[3];
+	xyz0[0] = 0;
+	xyz0[1] = 0;
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+	for (int i = 1; i < 3; i++)
+	{
+		xyz0[0] = cos(i * M_PI / 3);
+		xyz0[1] = sin(i * M_PI / 3);
+		xyz0[2] = 0;
+    	g.add_vertex(xyz0);
+	}
+	//Last vertex creates a diamond
+	xyz0[0] = 0;
+	xyz0[1] = 2*sin(M_PI/3);
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+	//Here, the first two arguments are the vertex indices
+	//The third argument is the dimer type (0=CD,1=BA,2=AB,3=DC)
+	//The last argument says whether this half edge is on the boundary or not
+	//First CD
+	g.add_half_edge_type(g.v[0].vid, g.v[1].vid, 0, -1); 
+	g.add_half_edge_type(g.v[1].vid, g.v[0].vid, 3, 0); //boundary
+	//Middle CD
+	g.add_half_edge_type(g.v[1].vid, g.v[2].vid, 0, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[1].vid, 3, -1);
+	//Second CD
+	g.add_half_edge_type(g.v[2].vid, g.v[0].vid, 0, -1);
+	g.add_half_edge_type(g.v[0].vid, g.v[2].vid, 3, 0); //boundary
+	//Second CD
+	g.add_half_edge_type(g.v[1].vid, g.v[3].vid, 3, -1);
+	g.add_half_edge_type(g.v[3].vid, g.v[1].vid, 0, 0); //boundary
+	//Third CD
+	g.add_half_edge_type(g.v[3].vid, g.v[2].vid, 3, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[3].vid, 0, 0); //boundary
+
+	//Set indices determining half edge connectivity
+	g.set_prev_next(g.he[0].id, g.he[4].id, g.he[2].id); //CD-CD-CD
+	g.set_prev_next(g.he[2].id, g.he[0].id, g.he[4].id); //CD-CD-CD
+	g.set_prev_next(g.he[4].id, g.he[2].id, g.he[0].id); //CD-CD-CD
+	g.set_prev_next(g.he[6].id, g.he[3].id, g.he[8].id); //CD-CD-CD
+	g.set_prev_next(g.he[8].id, g.he[6].id, g.he[3].id); //CD-CD-CD
+	g.set_prev_next(g.he[3].id, g.he[8].id, g.he[6].id); //CD-CD-CD
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	g.update_boundary();
+	std:: cout << "AFTER update_boundary:" << std::endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+
+    //Add drugs
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++){
+    
+        if (!(g.is_boundary(it->id) > 0)){
+            if(it->id!=4){
+                it->din = 1;
+                g.Nd++;
+            }
+            std::cout << "test: " << it->din << std::endl;
+        }
+        g.update_half_edge(it->id);
+    }
 	//exit(1);	
 }
 

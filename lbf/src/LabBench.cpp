@@ -377,6 +377,10 @@ void LabBench::do_simulation(std::string expt)
         std::cout << "Doing umbrella sampling." << std::endl;
         this->run_us_simulation();
     } 
+    else if (expt=="test_dimer_drug_removal") {
+        std::cout << "Testing drug-bound dimer removal." << std::endl;
+        this->test_dimer_drug_removal();
+    }
     else {
         std::cout << "This simulation has not been designed yet.\n" << std::endl;
         exit(0);
@@ -422,6 +426,180 @@ void LabBench::run_standard_simulation()
 
     std::cout << "Doing production run..." << std::endl;
     this->run(this->production_steps, "/prod", this->obs.particles_freq, this->obs.thermo_freq);
+}
+
+/******************************/
+/*** Testing ****/
+/******************************/
+
+void LabBench::test_dimer_drug_removal()
+{
+
+    //Create a diamond with CAMs bound at all sites
+
+    std::cout << "Creating initial configuration: diamond (5-mer) with CAM bound at all sites" << std::endl;
+    make_initial_diamond_sheet_all_sites_filled(sys);
+
+    std::cout << "Equilibrating..." << std::endl;
+    this->run_equil(this->equil_steps);
+
+    //Remove dimer of dimers
+    std::cout << "-1, 0 mean no removal, 1 means one dimer removed, 2 means two dimers removed" << std::endl;
+    std::cout << "TEST1: attempting to remove dimer of dimers, no drug, should fail." << std::endl;
+    int value = solver.attempt_remove_monomer_dimer(sys, 7);
+    //int value = solver.attempt_remove_monomer_dimer_drug(sys, 7);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST2: attempting to remove dimer of dimers, with drug, should fail because of other drugs bound." << std::endl;
+    obs.dump_lammps_traj_dimers(sys, 1);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 7);
+    obs.dump_lammps_traj_dimers(sys, 2);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST3: attempting to remove dimer of dimers, with drug, should fail because of one drug at other interface." << std::endl;
+    sys.he[0].din=0; //remove a drug
+    obs.dump_lammps_traj_dimers(sys, 3);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
+    //value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
+    obs.dump_lammps_traj_dimers(sys, 4);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST4: attempting to remove dimer of dimers, with drug, should fail because of one drug at other interface." << std::endl;
+    sys.he[0].din=1;
+    sys.he[1].din=0;
+    obs.dump_lammps_traj_dimers(sys, 5);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
+    //value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
+    obs.dump_lammps_traj_dimers(sys, 6);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST5: attempting to remove dimer of dimers, with drug, should succeed because no drugs at other interfaces." << std::endl;
+    sys.he[0].din=0; //remove a drug
+    sys.he[2].din=0;
+    obs.dump_lammps_traj_dimers(sys, 7);
+    //value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
+    obs.dump_lammps_traj_dimers(sys, 8);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==2) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+}
+
+void LabBench::test_dimer_removal()
+{
+
+    //Create a diamond with CAMs bound at all sites except one
+
+    std::cout << "Creating initial configuration: diamond (5-mer) with CAM bound at all sites" << std::endl;
+    make_initial_diamond_sheet_all_sites_filled_but_one(sys);
+
+    std::cout << "Equilibrating..." << std::endl;
+    this->run_equil(this->equil_steps);
+
+    //Remove dimer of dimers
+    std::cout << "-1, 0 mean no removal, 1 means one dimer removed, 2 means two dimers removed" << std::endl;
+    std::cout << "TEST1: attempting to remove dimer of dimers, no drug, should fail." << std::endl;
+    int value = solver.attempt_remove_monomer_dimer(sys, 7);
+    //int value = solver.attempt_remove_monomer_dimer_drug(sys, 7);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST2: attempting to remove dimer of dimers, with drug, should fail because of other drugs bound." << std::endl;
+    obs.dump_lammps_traj_dimers(sys, 1);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 7);
+    obs.dump_lammps_traj_dimers(sys, 2);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST3: attempting to remove dimer of dimers, with drug, should fail because of one drug at other interface." << std::endl;
+    sys.he[0].din=0; //remove a drug
+    obs.dump_lammps_traj_dimers(sys, 3);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
+    //value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
+    obs.dump_lammps_traj_dimers(sys, 4);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST4: attempting to remove dimer of dimers, with drug, should fail because of one drug at other interface." << std::endl;
+    sys.he[0].din=1;
+    sys.he[1].din=0;
+    obs.dump_lammps_traj_dimers(sys, 5);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
+    //value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
+    obs.dump_lammps_traj_dimers(sys, 6);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==-1) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "TEST5: attempting to remove dimer of dimers, with drug, should succeed because no drugs at other interfaces." << std::endl;
+    sys.he[0].din=0; //remove a drug
+    sys.he[2].din=0;
+    obs.dump_lammps_traj_dimers(sys, 7);
+    //value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
+    obs.dump_lammps_traj_dimers(sys, 8);
+    std::cout << "MC outcome: " << value << std::endl;
+    if(value==2) std::cout << "Test passed!" << std::endl;
+    else{
+        std::cout << "TEST FAILED!" << std::endl;
+        exit(-1);
+    }
+
 }
 
 /******************************/

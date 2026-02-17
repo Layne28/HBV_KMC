@@ -37,6 +37,7 @@ int main(int argc, char * argv[])
     gsl_rng *myGen = CustomRandom::init_rng(seed);
 
     LabBench myBench(myParams, myGen);
+    std::cout << "Created labbench" << std::endl;
     myBench.do_simulation(myBench.simulation);
 
     return 0;

@@ -1,19 +1,14 @@
 #!/bin/bash
 
-#SBATCH -J HBV_KMC          # Job name
-#SBATCH -o HBV_KMC.o%j       # Name of stdout output file
-#SBATCH -e HBV_KMC.e%j       # Name of stderr error file
-#SBATCH -p spr,icx,skx             # Queue (partition) name
-##SBATCH -N 4               # Total # of nodes 
+#SBATCH -J MSM_KMC          # Job name
+#SBATCH -o MSM_KMC.o%j       # Name of stdout output file
+#SBATCH -e MSM_KMC.e%j       # Name of stderr error file
+#SBATCH --account=hagan-lab
+#SBATCH --partition=hagan-compute-short             # Queue (partition) name
 #SBATCH -N 1               # Total # of nodes 
-##SBATCH -t 24:00:00        # Run time (hh:mm:ss)
-#SBATCH -t 1:00:00        # Run time (hh:mm:ss)
-##SBATCH --mail-user=username@tacc.utexas.edu
-##SBATCH --mail-type=all    # Send email at begin and end of job
-
-module load pylauncher
-LD_LIBRARY_PATH=$HOME/.local/lib:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH
+#SBATCH -n 5
+#SBATCH --mem-per-cpu=2G
+#SBATCH -t 12:00:00        # Run time (hh:mm:ss)
 
 
 if [ "$#" -eq 0 ]; then
@@ -22,14 +17,13 @@ if [ "$#" -eq 0 ]; then
   exit 1 # Exit with a non-zero status to indicate an error
 fi
 subfolder=$1
-ndimer=$2
-nCD=$3
-ndrug=$4
-lag=$5
+lag=$2
+do_pad=$3
+do_abs=$4
 
 datetime=$(date +"%Y_%m_%d_%H_%M_%S")
 scratch_dir="$SCRATCH/capsid-assembly/HBV_KMC/"
-scratch_subdir="$SCRATCH/capsid-assembly/HBV_KMC/${subfolder}_analysis_$datetime/"
+scratch_subdir="$SCRATCH/capsid-assembly/HBV_KMC/${subfolder}_tau=${lag}_analysis_$datetime/"
 scratch_data_subdir="$SCRATCH/capsid-assembly/HBV_KMC/${subfolder}/"
 
 #Make directories and copy files to SCRATCH
@@ -41,4 +35,4 @@ cp -r scripts/analysis ${scratch_subdir}scripts/
 cd ${scratch_subdir}
 
 #Launch jobs
-python ${scratch_subdir}scripts/analysis/hbv_msm.py ${scratch_data_subdir} ${ndimer} ${nCD} ${ndrug} ${lag}
+python ${scratch_subdir}scripts/analysis/hbv_msm.py ${scratch_data_subdir} ${lag} ${do_pad} ${do_abs}

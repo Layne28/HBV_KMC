@@ -30,7 +30,7 @@ def process_trajectory(trajectory_file):
 
     #define max values of n_dimer and n_CD
     n_dimer_max=130
-    n_CD_max=130
+    n_CD_max=70
 
     n_dimer_states = math.ceil(n_dimer_max/n_dimer_interv)
     n_CD_states = math.ceil(n_CD_max/n_CD_interv)
@@ -65,6 +65,7 @@ def process_trajectory(trajectory_file):
             else:
                 n_CD_string = '%d-%d' % (j*n_CD_interv, j*n_CD_interv+n_CD_interv-1)
             state_list.append("ndimer=%s_nCD=%s" % (n_dimer_string, n_CD_string))
+    state_list.append('malformed')
 
     #print(state_list)
 
@@ -94,11 +95,15 @@ def process_trajectory(trajectory_file):
     #Convert to states
     dimer_states = []
     CD_states = []
+    is_malformed = []
     for i in range(num_ndimer.shape[0]):
+        malformed_flag = 0
         ndimer = num_ndimer[i]
         index = int(ndimer//n_dimer_interv)
         if index>=len(bins_dimer):
             index = len(bins_dimer)-1
+        if ndimer>n_dimer_max:
+            malformed_flag = 1
         dimer_states.append(bins_dimer[index])
 
         nCD = num_nCD[i]
@@ -106,10 +111,15 @@ def process_trajectory(trajectory_file):
         if index>=len(bins_CD):
             index = len(bins_CD)-1
         CD_states.append(bins_CD[index])
+
+        is_malformed.append(malformed_flag)
     
     state_traj = []
     for i in range(len(dimer_states)):
-        state_traj.append("ndimer=%s_nCD=%s" % (dimer_states[i], CD_states[i]))
+        if is_malformed[i] == 1:
+            state_traj.append("malformed")
+        else:
+            state_traj.append("ndimer=%s_nCD=%s" % (dimer_states[i], CD_states[i]))
 
     #print(state_traj)
 

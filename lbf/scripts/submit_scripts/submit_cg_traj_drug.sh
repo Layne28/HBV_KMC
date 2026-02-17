@@ -1,13 +1,19 @@
 #!/bin/bash
 
-#SBATCH -J CG_KMC          # Job name
-#SBATCH -o CG_KMC.o%j       # Name of stdout output file
-#SBATCH -e CG_KMC.e%j       # Name of stderr error file
-#SBATCH --account=hagan-lab
-#SBATCH --partition=hagan-compute-short             # Queue (partition) name
+#SBATCH -J HBV_KMC          # Job name
+#SBATCH -o HBV_KMC.o%j       # Name of stdout output file
+#SBATCH -e HBV_KMC.e%j       # Name of stderr error file
+#SBATCH -p spr,icx,skx             # Queue (partition) name
+##SBATCH -N 4               # Total # of nodes 
 #SBATCH -N 1               # Total # of nodes 
-#SBATCH -n 1
+##SBATCH -t 24:00:00        # Run time (hh:mm:ss)
 #SBATCH -t 12:00:00        # Run time (hh:mm:ss)
+##SBATCH --mail-user=username@tacc.utexas.edu
+##SBATCH --mail-type=all    # Send email at begin and end of job
+
+module load pylauncher
+LD_LIBRARY_PATH=$HOME/.local/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH
 
 
 if [ "$#" -eq 0 ]; then
@@ -31,4 +37,4 @@ cp -r scripts/analysis ${scratch_subdir}scripts/
 cd ${scratch_subdir}
 
 #Launch jobs
-python ${scratch_subdir}scripts/analysis/hbv_cg_traj.py ${scratch_data_subdir}
+python ${scratch_subdir}scripts/analysis/hbv_drug_cg_traj.py ${scratch_data_subdir}

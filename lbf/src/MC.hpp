@@ -28,6 +28,7 @@ public:
     double kd0; //rate of drug binding relative to elastic relaxation
     int do_vertex_only = 0; //Only do vertex relaxation moves (no adding dimers or drug)
     int debug_sheet = 0; //Flag to print out probabilities of CD addition moves
+    int debug_dimer_drug_removal = 0;
 
     int frame = 0;
     int sweep_count = 0;

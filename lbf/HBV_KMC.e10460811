@@ -1,3 +1,0 @@
-terminate called after throwing an instance of 'std::ios_base::failure[abi:cxx11]'
-  what():  basic_ios::clear: iostream error
-/var/spool/slurm/d/job10460811/slurm_script: line 15: 121010 Aborted                 bin/hbv_kmc CAM_high_salt.in 34 seeds.txt

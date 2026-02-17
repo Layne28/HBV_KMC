@@ -1,0 +1,56 @@
+#Observer
+output_dir: ./data/mod_salt_farri_gdc
+config_freq: 10000
+thermo_freq: 200
+print_freq: 10000
+
+#Run info
+equil_steps: 100000
+production_steps: 200000000
+info_freq: 1000
+simulation: standard
+stop_early: 1
+
+#Monte Carlo parameters
+ks0: 0.02
+kd0: 0.00
+
+###########################
+#System/Geometry parameters
+###########################
+
+#change epsilon0 -> kappa_l
+epsilon0: 4200
+#change kappa0 -> kappa_phi
+kappa0: 40
+#change kappaPhi0 -> kappa_theta
+kappaPhi0: 800
+
+#Dihedral angles
+theta0: 0.240
+theta1: 0.480
+
+#Dimer-dimer binding affinities
+gb0: -9.8
+dg12: 0.3
+dg01: 0.1
+dg20: -0.1
+dg33: 0.0
+dg00: -0.8
+dgother: -0.95
+
+#Chemical potentials
+#muCD is ln(10muM)
+muCD: -11.5
+#dmu controls the conformational
+#free energy difference between AB and CD
+dmu: -4.5
+
+#Drug parameters
+#mudrug is ln(40muM)
+mudrug: -100.0
+#Drug-dimer binding affinity made up for now
+gdrug0: 0.0
+
+
+  
