@@ -1,9 +1,9 @@
 #!/bin/bash
 
-folders=('mod_salt_farri_gdc')
-lag_times=(200) #(200 800 1400 2000)
+folders=('mod_salt_lower_gdc_high_freq')
+lag_times=(10 20 50 100 200) #(200 800 1400 2000)
 
-do_pad=0
+do_pad=1
 do_abs=0
 
 #Submit jobs

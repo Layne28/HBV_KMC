@@ -5616,6 +5616,116 @@ void make_initial_diamond_sheet_all_sites_filled_but_one(System &g)
 	//exit(1);	
 }
 
+void make_initial_7mer(System &g)
+{
+    g.Nd=0;
+	//Create vertices
+	//1st 
+	double xyz0[3];
+	xyz0[0] = 0;
+	xyz0[1] = 0;
+	xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+    //2nd
+    xyz0[0] = 1;
+    xyz0[1] = 0;
+    xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+    //3rd
+    xyz0[0] = 0.5;
+    xyz0[1] = sin(M_PI/3);
+    xyz0[2] = 0;
+    g.add_vertex(xyz0);
+
+    //4th
+    xyz0[0] = 2;
+    xyz0[1] = 0;
+    xyz0[2] = 0;
+	g.add_vertex(xyz0);
+
+    //5th
+    xyz0[0] = 1.5;
+    xyz0[1] = sin(M_PI/3);
+    xyz0[2] = 0;
+    g.add_vertex(xyz0);
+
+	//Here, the first two arguments are the vertex indices
+	//The third argument is the dimer type (0=CD,1=BA,2=AB,3=DC)
+	//The last argument says whether this half edge is on the boundary or not
+	//First CD
+	g.add_half_edge_type(g.v[0].vid, g.v[1].vid, 0, -1); 
+	g.add_half_edge_type(g.v[1].vid, g.v[0].vid, 3, 0); //boundary
+	//2nd CD
+	g.add_half_edge_type(g.v[1].vid, g.v[2].vid, 0, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[1].vid, 3, -1);
+	//3rd CD
+	g.add_half_edge_type(g.v[2].vid, g.v[0].vid, 0, -1);
+	g.add_half_edge_type(g.v[0].vid, g.v[2].vid, 3, 0); //boundary
+	//4th CD
+	g.add_half_edge_type(g.v[1].vid, g.v[3].vid, 0, -1);
+	g.add_half_edge_type(g.v[3].vid, g.v[1].vid, 3, 0); //boundary
+	//5th CD
+	g.add_half_edge_type(g.v[3].vid, g.v[4].vid, 0, -1);
+	g.add_half_edge_type(g.v[4].vid, g.v[3].vid, 3, 0); //boundary
+	//6th CD
+	g.add_half_edge_type(g.v[4].vid, g.v[1].vid, 0, -1);
+	g.add_half_edge_type(g.v[1].vid, g.v[4].vid, 3, -1); 
+	//7th CD
+	g.add_half_edge_type(g.v[4].vid, g.v[2].vid, 3, -1);
+	g.add_half_edge_type(g.v[2].vid, g.v[4].vid, 0, 0); //boundary
+
+	//Set indices determining half edge connectivity
+	g.set_prev_next(g.he[0].id, g.he[4].id, g.he[2].id); //CD-CD-CD
+	g.set_prev_next(g.he[2].id, g.he[0].id, g.he[4].id); //CD-CD-CD
+	g.set_prev_next(g.he[4].id, g.he[2].id, g.he[0].id); //CD-CD-CD
+	g.set_prev_next(g.he[6].id, g.he[10].id, g.he[8].id); //CD-CD-CD
+	g.set_prev_next(g.he[10].id, g.he[8].id, g.he[6].id); //CD-CD-CD
+	g.set_prev_next(g.he[8].id, g.he[6].id, g.he[10].id); //CD-CD-CD
+    g.set_prev_next(g.he[12].id, g.he[11].id, g.he[3].id);
+    g.set_prev_next(g.he[11].id, g.he[3].id, g.he[12].id);
+    g.set_prev_next(g.he[3].id, g.he[12].id, g.he[11].id);
+
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+	g.update_boundary();
+	std:: cout << "AFTER update_boundary:" << std::endl;
+	for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++)
+	{
+		cout << "in make triangle updating edge" << it->id << endl;
+
+		g.update_half_edge(it->id);
+		cout << it->id << "in make triangle  TYPE " << g.he[it->id].type << " opid " << it->opid << " OP TYPE " << g.he[g.heidtoindex[it->opid]].type << endl;
+		cout << it->id << "in make triangle  ID " << it->id << " nextid " << it->nextid << " previd " << it->previd << endl;
+		cout << it->id << "in make triangle  boundary Index " << it->boundary_index << " next_boundary " << it->nextid_boundary << " previd boundary " << it->previd_boundary << endl;
+	}
+
+    //Add drugs
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++){
+    
+        if (!(g.is_boundary(it->id) > 0)){
+            it->din = 1;
+            g.Nd++;
+            std::cout << g.Nd << std::endl;
+            std::cout << "test: " << it->din << std::endl;
+        }
+        g.update_half_edge(it->id);
+    }
+    std::cout << "num CAMs added: " << g.Nd << std::endl;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); it++){
+        std::cout << it->din << std::endl;
+    }
+	//exit(1);	
+}
+
 void make_initial_from_file(System &g, std::string filename)
 {
 	std::ifstream file(filename);

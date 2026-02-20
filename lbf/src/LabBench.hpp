@@ -55,7 +55,9 @@ public:
     void run_standard_simulation(); //equilibrate and then observe an unperturbed system
     void run_ffs_simulation(); //forward flux sampling
     void run_us_simulation(); //umbrella sampling
-    void test_dimer_drug_removal(); //umbrella sampling
+    void test_dimer_drug_removal(); 
+    void test_dimer_removal();
+    void test_monomer_removal();
 
 };
 

@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./data/test_dimer_drug_removal
+output_dir: ./data/test_monomer_removal
 config_freq: 1
 thermo_freq: 1
 print_freq: 1
@@ -8,10 +8,11 @@ print_freq: 1
 equil_steps: 100
 production_steps: 2
 info_freq: 1
-simulation: test_dimer_drug_removal 
+simulation: test_monomer_removal 
 stop_early: 1
-lenpoints: 100000
+lenpoints: 1000
 debug_dimer_drug_removal: 1
+test_monomer_removal: 1
 
 #Monte Carlo parameters
 ks0: 0.02
