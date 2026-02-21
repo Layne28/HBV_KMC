@@ -1503,7 +1503,7 @@ void System::set_prev_next_boundary(int previd0, int nextid0)
 	//cout << "he[heindex].vout" << he[heindex].vout << " he[nextindex].vin " << he[nextindex].vin << " he[heindex].vin " <<  he[heindex].vin  << " he[previndex].vout "  << he[previndex].vout << endl;
 	if ((he[previndex].vout != he[nextindex].vin))
 	{
-		cout << " WRONG VIN VOUT IN SET_PREV_NEXT" << endl;
+		cout << " WRONG VIN VOUT IN SET_PREV_NEXT_BOUNDARY" << endl;
 		exit(-1);
 	}
 	if ((he[previndex].boundary_index != he[nextindex].boundary_index))

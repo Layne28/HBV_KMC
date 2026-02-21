@@ -614,6 +614,8 @@ void LabBench::test_monomer_removal()
     std::cout << "Equilibrating..." << std::endl;
     this->run_equil(this->equil_steps);
 
+    std::cout << "Vin/vout of edge to be removed: " << sys.he[13].vin << " " << sys.he[13].vout << std::endl;
+
     //Remove monomer
     std::cout << "-1, 0 mean no removal, 1 means one dimer removed, 2 means two dimers removed" << std::endl;
     std::cout << "TEST1: attempting to remove monomer, should fail because of CAMs bound to both interfaces." << std::endl;
