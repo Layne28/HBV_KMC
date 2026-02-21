@@ -1344,7 +1344,7 @@ int System::delete_edge(int heid0)
             if(it->vout==it2->vid) vout_in_v = 1;
         }
         if (vout_in_v==0){
-            std::cout << "WARNING: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+            std::cout << "WARNING: in delete_edge, vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
             //exit(-1);
         }
     }

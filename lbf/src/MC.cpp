@@ -2431,7 +2431,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 //std::cout << "updating index after removing dimer (l 2343)" << std::endl;
                 g.update_index();
                 //std::cout << "checking verts before deleting vertex" << std::endl;
-                check_vout_in_vid(g);
+                //check_vout_in_vid(g);
 		//241125 between here and next g.update_index() something is going wrong
 		//FIXED: check whether the vertex is still associated with other half edges, if so don't delete it
 		        if(check_vid_in_vout(g,vi)==0){
@@ -2440,7 +2440,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                     del_vert_counter++;
                     //std::cout << "Deleted "<< del_vert_counter << " times" << std::endl;
                     //std::cout << "Checking verts on l 2346" << std::endl;
-                    check_vout_in_vid(g);
+                    //check_vout_in_vid(g);
                     if (x < 0)
                     {
                         std::cout << "error deleting vertex" << std::endl;
@@ -5962,7 +5962,7 @@ int MC::check_vout_in_vid(System &g){
             if(it->vout==it2->vid) vout_in_v = 1;
         }
         if (vout_in_v==0){
-            std::cout << "WARNING: vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
+            std::cout << "WARNING: in check_vout_in_vid, vout (" << it->vout << ") is not in the vextex id list!" << std::endl;
             //exit(-1);
         }
     }
