@@ -480,9 +480,10 @@ void LabBench::test_dimer_drug_removal()
 
     std::cout << "TEST3: attempting to remove dimer of dimers, with drug, should fail because of one drug at other interface." << std::endl;
     sys.he[2].din=0; //remove a drug
+    sys.Nd--;
     obs.dump_lammps_traj_dimers(sys, 3);
-    value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
-    //value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
+    //value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
+    value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
     obs.dump_lammps_traj_dimers(sys, 4);
     std::cout << "MC outcome: " << value << std::endl;
     if(value==-1) std::cout << "Test passed!" << std::endl;
@@ -512,6 +513,7 @@ void LabBench::test_dimer_drug_removal()
     std::cout << "TEST5: attempting to remove dimer of dimers, with drug, should succeed because no drugs at other interfaces." << std::endl;
     sys.he[2].din=0; //remove a drug
     sys.he[4].din=0;
+    sys.Nd--;
     obs.dump_lammps_traj_dimers(sys, 7);
     //value = solver.attempt_remove_monomer_dimer_drug(sys, 1);
     value = solver.attempt_remove_monomer_dimer_drug(sys, 5);
@@ -531,7 +533,9 @@ void LabBench::test_dimer_removal()
     //Create a diamond with CAMs bound at all sites except one
 
     std::cout << "Creating initial configuration: diamond (5-mer) with CAM bound at all sites" << std::endl;
-    make_initial_diamond_sheet_all_sites_filled_but_one(sys);
+    make_initial_diamond_sheet_all_sites_filled(sys);
+    sys.he[0].din=0;
+    sys.Nd--;
 
     std::cout << "Equilibrating..." << std::endl;
     this->run_equil(this->equil_steps);
@@ -551,8 +555,9 @@ void LabBench::test_dimer_removal()
     std::cout << std::endl;
 
     std::cout << "TEST2: attempting to remove dimer of dimers w/o drug, should fail because of one drug at other interface." << std::endl;
-    sys.he[2].din=0; //remove a drug
     obs.dump_lammps_traj_dimers(sys, 9);
+    sys.he[2].din=0; //remove a drug
+    sys.Nd--;
     value = solver.attempt_remove_monomer_dimer(sys, 1);
     //value = solver.attempt_remove_monomer_dimer(sys, 5);
     obs.dump_lammps_traj_dimers(sys, 10);
@@ -569,8 +574,8 @@ void LabBench::test_dimer_removal()
     sys.he[2].din=1;
     sys.he[4].din=0;
     obs.dump_lammps_traj_dimers(sys, 11);
-    value = solver.attempt_remove_monomer_dimer(sys, 5);
-    //value = solver.attempt_remove_monomer_dimer(sys, 1);
+    //value = solver.attempt_remove_monomer_dimer(sys, 5);
+    value = solver.attempt_remove_monomer_dimer(sys, 1);
     obs.dump_lammps_traj_dimers(sys, 12);
     std::cout << "MC outcome: " << value << std::endl;
     if(value==-1) std::cout << "Test passed!" << std::endl;
@@ -584,6 +589,7 @@ void LabBench::test_dimer_removal()
     std::cout << "TEST5: attempting to remove dimer of dimers w/o drug, should succeed because no drugs at other interfaces." << std::endl;
     sys.he[2].din=0; //remove a drug
     sys.he[4].din=0;
+    sys.Nd--;
     obs.dump_lammps_traj_dimers(sys, 13);
     //value = solver.attempt_remove_monomer_dimer(sys, 1);
     value = solver.attempt_remove_monomer_dimer(sys, 5);
@@ -640,7 +646,7 @@ void LabBench::test_monomer_removal()
     std::cout << "TEST3: attempting to remove monomer, should fail because of one drug at other interface." << std::endl;
     for(int i=0; i<14; i++) std::cout << i << " " << sys.he[i].din << std::endl;
     sys.he[12].din=1;
-    sys.he[4].din=0;
+    sys.he[3].din=0;
     obs.dump_lammps_traj_dimers(sys, 11);
     value = solver.attempt_remove_monomer_dimer(sys, 13);
     obs.dump_lammps_traj_dimers(sys, 12);
@@ -655,7 +661,7 @@ void LabBench::test_monomer_removal()
 
     std::cout << "TEST4: attempting to remove monomer, should succeed because no drugs at other interfaces (although drug at opposite vertex)." << std::endl;
     sys.he[12].din=0; //remove a drug
-    sys.he[4].din=0;
+    sys.he[3].din=0;
     sys.Nd--;
     obs.dump_lammps_traj_dimers(sys, 13);
     value = solver.attempt_remove_monomer_dimer(sys, 13);

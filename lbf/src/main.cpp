@@ -8,7 +8,7 @@
 #include "IO.hpp"
 
 using namespace std;
-namespace fs = std::experimental::filesystem;
+namespace fs = std::filesystem;
 //void determine_seed(long unsigned int &seed, std::string seed_file, ParamDict &myParams);
 
 int main(int argc, char * argv[])

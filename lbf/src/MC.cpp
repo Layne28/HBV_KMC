@@ -2050,10 +2050,10 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
 
         //Check if drug is bound to selected half edge OR to the other interface
         //Problem is, which one is the "surface" interface?
-        //It's heopprev
-        if(g.he[heopindex0].din==1 || g.he[prevopindex0].din==1)
+        //It's heopnext
+        if(g.he[heopindex0].din==1 || g.he[nextopindex0].din==1)
         {
-            if(debug_dimer_drug_removal==1) std::cout << "Drug bound to heop or prev op. Skipping" << std::endl;
+            if(debug_dimer_drug_removal==1) std::cout << "Drug bound to heop or next op. Skipping" << std::endl;
             return (-1);
         }
 
@@ -2155,7 +2155,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
     {
 
         //Reject if any drugs are bound within triangle
-        if ((g.he[heindex0].din == 1) || g.he[heopindex0].din == 1 || g.he[nextopindex0].din==1 || g.he[prevopindex0].din==1)
+        if ( g.he[heopindex0].din == 1 || g.he[nextopindex0].din==1 || g.he[prevopindex0].din==1)
         {
             //std::cout << " din=1 "<<endl;
             if(debug_dimer_drug_removal==1) std::cout << "Drug bound to inner triangle. Skipping." << std::endl;
@@ -2599,20 +2599,19 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
                 return -1;
             }
-            //Check if opposite of previous boundary edge has drug
+            //Check if opposite edge has drug
             int opprevboundindex0 = g.heidtoindex[g.he[heindex_prev_boundary].opid];
-            if(g.he[opprevboundindex0].din==1){
+            if(g.he[heopindex0].din==1){
                 if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
                 return -1;
             }
-
 
             //LBF: correcting this 2/16/26
             //Should be opposite of next boundary edge
             //if (g.he[heopindex0].din == 1) //Checking that this interface has drug bound
             int opnextboundindex0 = g.heidtoindex[g.he[heindex_next_boundary].opid];
             //if (g.he[g.heidtoindex[nextopid0]].din == 1 ) //Checks that drug is bound at interface
-            if (g.he[heopindex0].din==1) //Checks that drug is bound at interface
+            if (g.he[nextopindex0].din==1) //Checks that drug is bound at interface
             {
             if (g.he[heindex0].type == 0 || g.he[heindex0].type==3)
             {
@@ -2768,13 +2767,13 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             //if (g.he[heindex_next_boundary].din==1 || g.he[g.heidtoindex[prevopid0]].din==1 ) { return(-1);} //WITHDRUG no removal
             
             //Reject attempt if there are drugs bound to other interfaces
-            //Check if opposite edge has drug bound 
-            if(g.he[heopindex0].din==1){
+            //Check if next of opposite edge has drug bound 
+            if(g.he[nextopindex0].din==1){
                 if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
                 return -1;
             }
-            //Check if next of opposite edge has drug bound
-            if(g.he[nextopindex0].din==1){
+            //Check if prev of opposite edge has drug bound
+            if(g.he[prevopindex0].din==1){
                 if(debug_dimer_drug_removal==1) std::cout << "Rejecting dimer-of-dimer removal because of drug at other interface." << std::endl;
                 return -1;
             }
@@ -2783,7 +2782,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             //Should be opposite of next boundary edge
             //if (g.he[heopindex0].din == 1) //Checking that this interface has drug bound
             int opnextboundindex0 = g.heidtoindex[g.he[heindex_next_boundary].opid];
-            if (g.he[opnextboundindex0].din==1)
+            if (g.he[heopindex0].din==1)
             {
             if (g.he[heindex0].type == 0 || g.he[heindex0].type==3)
             {
