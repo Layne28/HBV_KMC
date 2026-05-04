@@ -1,7 +1,7 @@
 #!/bin/bash
 
-folders=('mod_salt_lower_gdc_nostop')
-lag_times=(200) #(200 800 1400 2000)
+folders=('mod_salt')
+lag_times=(200 800 1400 2000)
 
 do_pad=0
 do_abs=0

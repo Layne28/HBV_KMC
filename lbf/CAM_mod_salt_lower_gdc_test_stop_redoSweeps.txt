@@ -1,0 +1,3 @@
+./hbv_kmc CAM_mod_salt_lower_gdc_test_stop.in 26 seeds.txt
+./hbv_kmc CAM_mod_salt_lower_gdc_test_stop.in 31 seeds.txt
+./hbv_kmc CAM_mod_salt_lower_gdc_test_stop.in 55 seeds.txt

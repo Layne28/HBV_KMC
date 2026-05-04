@@ -10,6 +10,7 @@ production_steps: 200000000
 info_freq: 1000
 simulation: standard
 stop_early: 1
+stop_slow: 1
 
 #Monte Carlo parameters
 ##ratio of subunit addition to drug binding consistent w/ experiment
@@ -37,7 +38,7 @@ dg12: 0.3
 dg01: 0.1
 dg20: -0.1
 dg33: 0.0
-dg00: -0.2
+dg00: -0.4
 dgother: -0.95
 
 #Chemical potentials

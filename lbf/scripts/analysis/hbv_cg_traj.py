@@ -16,7 +16,7 @@ def main():
     print(myfolder)
     for i in range(nseeds):
         #myfile = myfolder + '/seed-%d/energy.dat' % (i+1)
-        myfile = myfolder + '/seed=%d/prod/energy.dat' % (i+1)
+        myfile = myfolder + '/seed=%d/prod/energy_trunc.dat' % (i+1)
         if os.path.exists(myfile):
             #print(myfile)
             if os.path.getsize(myfile) > 0:

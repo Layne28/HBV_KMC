@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./data/high_salt
+output_dir: ./data/high_salt_test_stop
 config_freq: 10000
 thermo_freq: 200
 print_freq: 10000

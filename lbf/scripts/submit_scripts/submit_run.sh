@@ -8,7 +8,7 @@
 #SBATCH -N 1               # Total # of nodes 
 #SBATCH -n 4
 #SBATCH --mem-per-cpu=4G
-#SBATCH -t 48:00:00        # Run time (hh:mm:ss)
+#SBATCH -t 96:00:00        # Run time (hh:mm:ss)
 
 
 #Run job

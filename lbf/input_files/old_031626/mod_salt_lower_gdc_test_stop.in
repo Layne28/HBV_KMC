@@ -1,5 +1,5 @@
 #Observer
-output_dir: ./data/high_salt
+output_dir: ./data/mod_salt_lower_gdc_test_stop
 config_freq: 10000
 thermo_freq: 200
 print_freq: 10000
@@ -11,6 +11,7 @@ info_freq: 1000
 simulation: standard
 stop_early: 1
 stop_slow: 1
+lenpoints: 200000000
 
 #Monte Carlo parameters
 ks0: 0.02
@@ -32,12 +33,12 @@ theta0: 0.240
 theta1: 0.480
 
 #Dimer-dimer binding affinities
-gb0: -9.76
+gb0: -9.8
 dg12: 0.3
 dg01: 0.1
 dg20: -0.1
 dg33: 0.0
-dg00: -0.6
+dg00: -0.5
 dgother: -0.95
 
 #Chemical potentials
@@ -45,7 +46,7 @@ dgother: -0.95
 muCD: -11.5
 #dmu controls the conformational
 #free energy difference between AB and CD
-dmu: -3.5
+dmu: -4.5
 
 #Drug parameters
 #mudrug is ln(40muM)
