@@ -45,6 +45,7 @@ public:
     int wedgefusion = 0;
     int wedgefission = 0;
     int boundtri = 0;
+    int unboundtri = 0;
     int binding = 0;
     int unbinding = 0;
     int minhe_fission = 50;

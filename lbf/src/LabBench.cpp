@@ -47,7 +47,6 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     int fission = 0;
     int wedgefusion = 0;
     int wedgefission = 0;
-    int boundtri = 0;
     int deletednorate = 0;
 
     int minHE_update_neigh = 150;
@@ -139,20 +138,13 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             cout << "#########  WEDGE FUSION HALFEDGES " << sys.fusionwedgehe.size() << " ##############" << endl;
             cout << "#########  ALL NEIGH " << sys.all_neigh << " ##############" << endl;
             cout << "#########  Nboundary " << sys.Nboundary << " ##############" << endl;
-            cout << "#########  Bound Triangle " << boundtri << " ##############" << endl;
+            cout << "#########  Bound Triangle " << solver.boundtri << " ##############" << endl;
+            cout << "#########  Unbound Triangle " << solver.unboundtri << " ##############" << endl;
             cout << "#########  Acceptance vmove " << (1.0 * sys.accepted_vmove) / (1.0 * (sys.accepted_vmove + sys.rejected_vmove)) << "#################" << endl;
             cout << "#########  Nvlast " << sys.Nvlast << " Nhelast " << sys.Nhelast << " ################" << endl;
             cout << "#########  T4 " << sys.NCD_T4_in << " T3 " << sys.NCD_T3_in << " ################" << endl;
             cout << "#########  NCD_Hex" << sys.NCD_Hex << "#################"<<endl;
             cout << "#########  avgAddInterval "<<avgAddInterval<<" ###############"<<endl;
-        }
-
-        int cc = check_bind_triangle(sys);
-        if (cc > 0)
-        {
-            cout << "bound triangle" << endl;
-            sys.update_boundary();
-            boundtri += cc;
         }
 
         sys.check_odd_neigh();
@@ -349,7 +341,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     cout << "#########  WEDGE FUSION HALFEDGES " << sys.fusionwedgehe.size() << " ##############" << endl;
     cout << "#########  ALL NEIGH " << sys.all_neigh << " ##############" << endl;
     cout << "#########  Nboundary " << sys.Nboundary << " ##############" << endl;
-    cout << "#########  Bound Triangle " << boundtri << " ##############" << endl;
+    cout << "#########  Bound Triangle " << solver.boundtri << " ##############" << endl;
+    cout << "#########  Unbound Triangle " << solver.unboundtri << " ##############" << endl;
     cout << "#########  NCD_Hex" << sys.NCD_Hex << "#################"<<endl;
 
     time(&timer2);
