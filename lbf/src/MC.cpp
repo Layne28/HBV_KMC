@@ -3108,6 +3108,23 @@ int MC::attempt_wedge_fusion(System &g)
         std::cout << "WRONG Geometry in wedge fusion" << endl;
         std::exit(-1);
     }
+
+    // heidm is assumed to be the third edge that closes the
+    // (heid_prev, heid_next, heidm) triangle once vidi/vidj are merged, but
+    // get_next_fusion_heid only verifies that vidi and vidj are *connected*
+    // by some path in the mesh graph, not that this specific mesh-adjacent
+    // edge actually closes the triangle. One of the two vin/vout relations
+    // is guaranteed by direct mesh adjacency depending on which branch above
+    // picked heidm; check the other one explicitly and reject rather than
+    // corrupt the mesh / crash in set_prev_next below.
+    bool heidm_closes_triangle = (bondnextm > 0)
+        ? (g.he[g.heidtoindex[heidm]].vout == g.he[heindex_prev].vin)
+        : (g.he[g.heidtoindex[heidm]].vin == g.he[heindex_next].vout);
+    if (!heidm_closes_triangle)
+    {
+        return -1;
+    }
+
     // now save th status
     //std::cout << "heid_prev " << heid_prev << " heid_next " << heid_next<< "heidm" << heidm <<endl;
 
