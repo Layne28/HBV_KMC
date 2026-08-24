@@ -14,6 +14,8 @@ LabBench::LabBench(ParamDict& theParams, gsl_rng*& theGen) : sys(theParams, theG
     if(theParams.is_key("initial_config")) initial_config = theParams.get_value("initial_config");
     if(theParams.is_key("seed")) seed = std::stoi(theParams.get_value("seed"));
     if(theParams.is_key("stop_early")) stop_early = std::stoi(theParams.get_value("stop_early"));
+    if(theParams.is_key("stop_slow")) stop_slow = std::stoi(theParams.get_value("stop_slow"));
+    if(theParams.is_key("max_size")) max_size = std::stoi(theParams.get_value("max_size"));
 }
 
 LabBench::~LabBench() {}
@@ -54,7 +56,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     int lastNheGrowth=0;
     int npace=0;
     double avgpace=0;
-    int avgAddInterval=2000;//10000;
+    int avgAddInterval=10000;
+    //int avgAddInterval=2000;//10000;
 
     //Write out parameters to file
     obs.dump_parameters(sys, subdir);
@@ -174,10 +177,10 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             }
         }
         //LBF check if capsid growth is stalled
-        if (sys.Nhe > minHE_update_neigh && i % (100*avgAddInterval) == 0 && stop_early==1)
+        if (sys.Nhe > minHE_update_neigh && i % (1000*avgAddInterval) == 0 && stop_slow==1)
         {
             if (abs( sys.Nhe - lastNheGrowth)<=4){
-                std::cout << "Assembly is >35 edges and growth has slowed to <2 edges per" << 20*avgAddInterval << ". Stopping." << std::endl;
+                std::cout << "Assembly is >75 edges and growth has slowed to <2 edges per" << 1000*avgAddInterval << ". Stopping." << std::endl;
                 sys.update_boundary();
                 dump_restart_lammps_data_file(sys, i);
                 time(&timer2);
@@ -253,7 +256,18 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
         }
         */
 
-        //Stop early if you reach T3 or T4
+        //Stop early if you reach T3 or T4 or max_size
+        if (sys.Nhe>=2*max_size && stop_early==1){
+            std::cout << "Reached maximum size (" << max_size << " edges)! Stopping now." << std::endl;
+            sys.update_boundary();
+            obs.dump_lammps_traj_dimers(sys, int(i));
+            dump_lammps_data_dimers(sys, 9999999);
+            dump_restart_lammps_data_file(sys, i);
+            time(&timer2);
+            seconds = difftime(timer2, timer1);
+            dump_analysis(sys, ofile, i, seed, seconds);
+            exit(-1);
+        }
         if (sys.Nhe==240 && sys.NCD_T4_in==60 && stop_early==1){
             std::cout << "Assembled T4 capsid! Stopping now." << std::endl;
             sys.update_boundary();

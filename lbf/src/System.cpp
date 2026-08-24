@@ -1599,7 +1599,8 @@ double System::add_dimer(int heid0, gsl_rng *r, int et1, int et2 , double *dista
 
 	//find the eqy=uilibrium point of new dimer XXXX
 	//cout << " in add_dimer" <<endl;
-	new_vertex_edge(heindex0, tempv1, et1);
+	int dov = new_vertex_edge(heindex0, tempv1, et1);
+    if(dov==-1) return -1;
 	//double d=new_vertex_edge_and_move(heindex0, newv, et1,r);
 	
 	
@@ -2602,20 +2603,7 @@ double System::new_vertex_edge_and_move(int heindex0, double *newv, int etnew,gs
 }
 
 
-// new_vertex_edge (below) exit(-1)s if the opposite edge's normal is still
-// the zero placeholder (i.e. that edge is a boundary edge whose normal was
-// never computed). This happens whenever the local neighborhood has more
-// simultaneous boundary edges than the caller assumed -- callers should use
-// this to bail out (reject the move) instead of reaching that exit(-1).
-int System::normal_ready_for_new_vertex_edge(int heindex0)
-{
-	int heopindex0 = heidtoindex[he[heindex0].opid];
-	if (he[heopindex0].n[0] == 0 && he[heopindex0].n[1] == 0 && he[heopindex0].n[2] == 0)
-		return -1;
-	return 1;
-}
-
-void System::new_vertex_edge(int heindex0, double *newv, int etnew)
+int System::new_vertex_edge(int heindex0, double *newv, int etnew)
 {
 
 	double *tempvec, *fvec , *fvecx , *fvecy;
@@ -2629,7 +2617,8 @@ void System::new_vertex_edge(int heindex0, double *newv, int etnew)
     //the normal vector to be zero
     //OR he[heopindex0] is messed up by some previous move (fission?)  
 	int heopindex0 = heidtoindex[he[heindex0].opid]; //TODO: add a check on this index
-	get_normal(he[heindex0].id);
+	int normal_result = get_normal(he[heindex0].id);
+    int normal_op_result = get_normal(he[heindex0].opid);
 	int et = he[heindex0].type;
 	
 	//cout <<"heopindex0 " <<heopindex0 <<endl;
@@ -2660,9 +2649,16 @@ void System::new_vertex_edge(int heindex0, double *newv, int etnew)
 	
 	//cout<< " tempvec" << tempvec[0] <<" " << tempvec[1] <<" " << tempvec[2] <<" " << endl;
 	//cout<< " he[heopindex0].n" << he[heopindex0].n[0] <<" " << he[heopindex0].n[1] <<" " << he[heopindex0].n[2] <<" " << endl;
+	//LBF 3/6/26: modifying this to just reject move, not exit simulation
 	if (he[heopindex0].n[0]==0 && he[heopindex0].n[1]==0 && he[heopindex0].n[2]==0){
         std::cout << "error in new vertex edge" << std::endl;
-        exit(-1);
+        std::cout << "heopindex0: " << heopindex0 << std::endl;
+        std::cout << "heindex0: " << heindex0 << std::endl;
+        std::cout << "opid: " << he[heindex0].opid << std::endl;
+        std::cout << "normal result: " << normal_result << std::endl;
+        std::cout << "normal op result: " << normal_op_result << std::endl;
+        return -1;
+        //exit(-1);
     }
 	multvec(tempvec,sin(angle)*l0[et]/norm(tempvec),fvecy);
 	//cout<< " fvecy" << fvecy[0] <<" " << fvecy[1] <<" " << fvecy[2] <<" " << endl;
@@ -2689,6 +2685,8 @@ void System::new_vertex_edge(int heindex0, double *newv, int etnew)
 	delete[] fvec;
 	delete[] fvecx;
 	delete[] fvecy;
+
+    return 1;
 	
 }
 

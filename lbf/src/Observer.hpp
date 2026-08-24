@@ -7,9 +7,11 @@
 #include <iomanip>
 #if __has_include(<filesystem>)
     #include <filesystem>
+    namespace fs = std::filesystem;
 //#elif __has_include(<experimental/filesystem>)
 #else
     #include <experimental/filesystem>
+    namespace fs = std::experimental::filesystem;
 #endif
 //#include <filesystem>
 #include "MC.hpp"
@@ -19,9 +21,6 @@
 //#include <highfive/H5File.hpp>
 //#include <highfive/H5DataSet.hpp>
 //#include <highfive/H5DataSpace.hpp>
-
-//namespace fs = std::experimental::filesystem;
-namespace fs = std::filesystem;
 
 class System;
 class MC;

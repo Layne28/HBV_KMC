@@ -2062,12 +2062,14 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
     // first try remove monomer, if the edge is not a wedge, remove dimer
     if (g.is_boundary(heid_prev_boundary) < 0 && g.is_boundary(heid_next_boundary) < 0)
     {
+    /*
     std::cout << "TEST feb 19" << std::endl;
     std::cout << g.is_vboundary(g.he[nextopindex0].vout) << std::endl;
     std::cout << g.Nboundary << std::endl;
     std::cout << g.v[g.vidtoindex[g.he[heindex0].vout]].doubleboundary << std::endl;
     std::cout << g.v[g.vidtoindex[g.he[heindex0].vin]].doubleboundary << std::endl;
     std::cout << "end test" << std::endl;
+    */
      if (test_monomer_removal==1 || ((g.is_vboundary(g.he[nextopindex0].vout) < 0 || g.Nboundary != 1) && \
        (g.v[g.vidtoindex[g.he[heindex0].vout]].doubleboundary==-1 && g.v[g.vidtoindex[g.he[heindex0].vin]].doubleboundary==-1 ) ))// if Nboundary>0 allow for double boundary;
     {                                                                                                                               //delete monomer
@@ -2248,16 +2250,12 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             double *tempv1 = new double[3];
             //double *dis_vector=new double[3];
             int heidtemp=g.he[nextopindex0].nextid;
-            // new_vertex_edge needs a valid (nonzero) normal on heidtemp's
-            // opposite edge; that can be missing when the local neighborhood
-            // has more simultaneous boundary edges than this move assumes.
-            // Reject rather than crash if so.
-            if (g.normal_ready_for_new_vertex_edge(g.heidtoindex[heidtemp]) < 0)
+            int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[heopindex0].type); // heopindex0 = g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
+            if(dov==-1)
             {
                 delete[] tempv1;
                 return -1;
             }
-            g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[heopindex0].type); // heopindex0 = g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
@@ -2392,16 +2390,12 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             double *tempv1 = new double[3];
             //double *dis_vector=new double[3];
             int heidtemp=g.he[heopindex0].nextid;
-            // new_vertex_edge needs a valid (nonzero) normal on heidtemp's
-            // opposite edge; that can be missing when the local neighborhood
-            // has more simultaneous boundary edges than this move assumes.
-            // Reject rather than crash if so.
-            if (g.normal_ready_for_new_vertex_edge(g.heidtoindex[heidtemp]) < 0)
+            int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[prevopindex0].type); // prevopindex = ? g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
+            if(dov==-1)
             {
                 delete[] tempv1;
                 return -1;
             }
-            g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[prevopindex0].type); // prevopindex = ? g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
@@ -2707,16 +2701,12 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             double *tempv1 = new double[3];
             //double *dis_vector=new double[3];
             int heidtemp=g.he[nextopindex0].nextid;
-            // new_vertex_edge needs a valid (nonzero) normal on heidtemp's
-            // opposite edge; that can be missing when the local neighborhood
-            // has more simultaneous boundary edges than this move assumes.
-            // Reject rather than crash if so.
-            if (g.normal_ready_for_new_vertex_edge(g.heidtoindex[heidtemp]) < 0)
+            int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[heopindex0].type); // heopindex0 = g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
+            if(dov==-1)
             {
                 delete[] tempv1;
                 return -1;
             }
-            g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[heopindex0].type); // heopindex0 = g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
@@ -2871,16 +2861,12 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             double *tempv1 = new double[3];
             //double *dis_vector=new double[3];
             int heidtemp=g.he[heopindex0].nextid;
-            // new_vertex_edge needs a valid (nonzero) normal on heidtemp's
-            // opposite edge; that can be missing when the local neighborhood
-            // has more simultaneous boundary edges than this move assumes.
-            // Reject rather than crash if so.
-            if (g.normal_ready_for_new_vertex_edge(g.heidtoindex[heidtemp]) < 0)
+            int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[prevopindex0].type); // prevopindex = ? g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
+            if(dov==-1)
             {
                 delete[] tempv1;
                 return -1;
             }
-            g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[prevopindex0].type); // prevopindex = ? g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;

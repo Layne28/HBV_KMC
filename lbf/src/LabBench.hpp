@@ -28,6 +28,8 @@ public:
     gsl_rng *rg;
     int seed;
     int stop_early = 0;
+    int stop_slow = 1;
+    int max_size = -1;
 
     std::string simulation = "standard";
     std::string initial_config = "triangle";

@@ -234,8 +234,7 @@ public:
 	int add_monomer_dimer(int heid0);
 	int remove_monomer_dimer(int heid0, gsl_rng *r);
 	void new_vertex(int heindex0, double *newv);
-	int normal_ready_for_new_vertex_edge(int heindex0);
-	void new_vertex_edge(int heindex0, double *newv,int et);
+	int new_vertex_edge(int heindex0, double *newv,int et);
 	double new_vertex_edge_and_move(int heindex0, double *newv, int etnew, gsl_rng *r);
 	void new_vertex_points(int heindex0, int ind_point, double *newv);
 	double move_p(double *pi, double *pf, gsl_rng *r);

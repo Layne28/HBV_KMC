@@ -10,6 +10,7 @@ production_steps: 200000000
 info_freq: 1000
 simulation: standard
 stop_early: 1
+stop_slow: 1
 
 #Monte Carlo parameters
 ks0: 0.02

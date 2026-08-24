@@ -1,0 +1,2 @@
+./hbv_kmc test.in 1 seeds.txt
+
