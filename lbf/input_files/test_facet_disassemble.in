@@ -1,0 +1,70 @@
+#Observer
+output_dir: ./data/test_facet_disassemble
+config_freq: 10
+thermo_freq: 10
+print_freq: 10
+
+#Run info
+equil_steps: 1000
+production_steps: 200000
+info_freq: 1000
+simulation: standard
+initial_config: /home/lfrechet/research/capsid-assembly/hbv_assembly/HBV_KMC/lbf/hpcc/HBV_KMC/lbf/T4_restart.dat
+stop_early: 0
+stop_slow: 0
+lenpoints: 2000000
+allow_trimer_moves: 1
+
+#Monte Carlo parameters
+ks0: 0.02
+kd0: 0.2
+
+###########################
+#System/Geometry parameters
+###########################
+
+#change epsilon0 -> kappa_l
+epsilon0: 4200
+#change kappa0 -> kappa_phi
+kappa0: 4000
+#change kappaPhi0 -> kappa_theta
+kappaPhi0: 800
+
+#Dihedral angles
+theta0: 0.000
+theta1: 0.730
+
+#Binding angles
+phi0: 1.05
+#C site, CD-CD HAP18
+phi1: 1.14
+#A site, BA-AB HAP18
+phi2: 1.00
+#B site, AB-CD HAP18
+phi3: 1.00
+#D site, CD-BA HAP18
+
+#Dimer-dimer binding affinities
+gb0: -6.0
+dg12: 0.3
+dg01: 0.1
+dg20: -0.1
+dg33: 0.0
+dg00: -0.5
+dgother: -0.95
+
+#Chemical potentials
+#muCD is ln(10muM)
+muCD: -11.5
+#dmu controls the conformational
+#free energy difference between AB and CD
+dmu: -4.5
+
+#Drug parameters
+#mudrug is ln(40muM)
+mudrug: 0.0
+#Drug-dimer binding affinity made up for now
+gdrug0: 0.0
+
+
+  

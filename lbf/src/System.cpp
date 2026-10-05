@@ -2615,12 +2615,58 @@ int System::new_vertex_edge(int heindex0, double *newv, int etnew)
 
     //LBF 02/05/26: I think this is getting an invalid heopindex0, causing
     //the normal vector to be zero
-    //OR he[heopindex0] is messed up by some previous move (fission?)  
+    //OR he[heopindex0] is messed up by some previous move (fission?)
 	int heopindex0 = heidtoindex[he[heindex0].opid]; //TODO: add a check on this index
 	int normal_result = get_normal(he[heindex0].id);
     int normal_op_result = get_normal(he[heindex0].opid);
 	int et = he[heindex0].type;
-	
+
+	// heopindex0's own normal is only defined when it's part of a complete
+	// closed face (get_normal returns -1 and zeroes it out otherwise -- see
+	// get_normal). That's common on a heavily eroded remnant, where the
+	// edge adjacent to heindex0 may itself be boundary-facing with no real
+	// triangle on either side nearby. Negating heindex0's own normal (the
+	// face on the OPPOSITE side of this same edge) was tried first, but
+	// measured badly wrong in practice (reconstructed position off by
+	// ~1.8, against a placement sigma of ~0.1) -- heopindex0 sitting at a
+	// sharp, concave fold (exactly where this comes up) means the two
+	// sides are nowhere near antiparallel, so that assumption doesn't
+	// hold here. Instead, walk a few steps along heopindex0's own
+	// boundary-loop chain (nextid_boundary/previd_boundary) looking for a
+	// nearby boundary edge whose OWN opposite is a genuine, complete
+	// triangle -- i.e. an actual real face near this location rather than
+	// an assumption about this one edge's geometry. For a shell whose
+	// curvature doesn't change sharply over a few edge-lengths (true
+	// almost everywhere except immediately at the fold itself), that
+	// real, nearby face's normal is a much better local proxy.
+	double opnormal_fallback[3];
+	bool used_fallback_normal = false;
+	if (normal_op_result == -1)
+	{
+		const int max_steps = 6;
+		int walkindex = heopindex0;
+		for (int dir = 0; dir < 2 && !used_fallback_normal; dir++)
+		{
+			walkindex = heopindex0;
+			for (int step = 0; step < max_steps; step++)
+			{
+				int nextid_walk = (dir == 0) ? he[walkindex].nextid_boundary : he[walkindex].previd_boundary;
+				if (nextid_walk == -1) break;
+				walkindex = heidtoindex[nextid_walk];
+				if (walkindex == heopindex0) break; // looped all the way around
+				int candopindex = heidtoindex[he[walkindex].opid];
+				if (get_normal(he[walkindex].opid) == 1)
+				{
+					opnormal_fallback[0] = he[candopindex].n[0];
+					opnormal_fallback[1] = he[candopindex].n[1];
+					opnormal_fallback[2] = he[candopindex].n[2];
+					used_fallback_normal = true;
+					break;
+				}
+			}
+		}
+	}
+
 	//cout <<"heopindex0 " <<heopindex0 <<endl;
 	// find the angle
 
@@ -2645,12 +2691,19 @@ int System::new_vertex_edge(int heindex0, double *newv, int etnew)
 	//cout<< " fvecy" << fvecx[0] <<" " << fvecx[1] <<" " << fvecx[2] <<" " << endl;
 	
 	// tempvec is y direction to find the vector
-	cross(he[heopindex0].n, he[heindex0].hevec, tempvec); 
-	
+	if (used_fallback_normal)
+	{
+		cross(opnormal_fallback, he[heindex0].hevec, tempvec);
+	}
+	else
+	{
+		cross(he[heopindex0].n, he[heindex0].hevec, tempvec);
+	}
+
 	//cout<< " tempvec" << tempvec[0] <<" " << tempvec[1] <<" " << tempvec[2] <<" " << endl;
 	//cout<< " he[heopindex0].n" << he[heopindex0].n[0] <<" " << he[heopindex0].n[1] <<" " << he[heopindex0].n[2] <<" " << endl;
 	//LBF 3/6/26: modifying this to just reject move, not exit simulation
-	if (he[heopindex0].n[0]==0 && he[heopindex0].n[1]==0 && he[heopindex0].n[2]==0){
+	if (!used_fallback_normal && he[heopindex0].n[0]==0 && he[heopindex0].n[1]==0 && he[heopindex0].n[2]==0){
         std::cout << "error in new vertex edge" << std::endl;
         std::cout << "heopindex0: " << heopindex0 << std::endl;
         std::cout << "heindex0: " << heindex0 << std::endl;

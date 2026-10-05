@@ -30,6 +30,9 @@ public:
     int debug_sheet = 0; //Flag to print out probabilities of CD addition moves
     int debug_dimer_drug_removal = 0;
     int test_monomer_removal = 0;
+    int allow_trimer_moves = 0; //Enable attempt_add/remove_trimer_dimer in sweep() (off by default: with typical mu values these can dissolve the seed triangle entirely, which existing configs don't expect)
+    int allow_bridge_moves = 0; //Enable attempt_add/remove_monomer_bridge in sweep() (off by default, same reasoning as allow_trimer_moves)
+    int allow_bridge_add_moves = 0; //Additionally enable attempt_add_monomer_bridge specifically (needs allow_bridge_moves too). Off by default: validated extensively for attempt_remove_monomer_bridge, but attempt_add_monomer_bridge's boundary-chain bookkeeping still has known unresolved edge cases on large, highly-doubleboundary structures (many split/merge cycles) -- see MC.cpp. Safe to enable removal alone without this.
 
     int frame = 0;
     int sweep_count = 0;
@@ -46,6 +49,10 @@ public:
     int wedgefission = 0;
     int boundtri = 0;
     int unboundtri = 0;
+    int trimeradded = 0;
+    int trimerremoved = 0;
+    int bridgeadded = 0;
+    int bridgeremoved = 0;
     int binding = 0;
     int unbinding = 0;
     int minhe_fission = 50;
@@ -102,6 +109,14 @@ public:
 
     int attempt_bind_triangle(System &g, int heid0);
     int attempt_unbind_triangle(System &g, int heid0);
+
+    int attempt_add_trimer_dimer(System &g);
+    int attempt_remove_trimer_dimer(System &g);
+    bool is_pendant_boundary_loop(System &g, int heid0);
+
+    int attempt_add_monomer_bridge(System &g);
+    int attempt_remove_monomer_bridge(System &g);
+    int fresh_boundary_index(System &g);
 
     int attempt_add_drug(System &g, int heid0);
     int attempt_remove_drug(System &g, int heid0);

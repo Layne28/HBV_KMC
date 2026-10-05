@@ -9,6 +9,9 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
     if(theParams.is_key("debug_sheet")) debug_sheet = std::stoi(theParams.get_value("debug_sheet"));
     if(theParams.is_key("debug_dimer_drug_removal")) debug_dimer_drug_removal = std::stoi(theParams.get_value("debug_dimer_drug_removal"));
     if(theParams.is_key("test_monomer_removal")) test_monomer_removal = std::stoi(theParams.get_value("test_monomer_removal"));
+    if(theParams.is_key("allow_trimer_moves")) allow_trimer_moves = std::stoi(theParams.get_value("allow_trimer_moves"));
+    if(theParams.is_key("allow_bridge_moves")) allow_bridge_moves = std::stoi(theParams.get_value("allow_bridge_moves"));
+    if(theParams.is_key("allow_bridge_add_moves")) allow_bridge_add_moves = std::stoi(theParams.get_value("allow_bridge_add_moves"));
 
     //***Set RNG***
     rg = the_rg;
@@ -267,6 +270,64 @@ void MC::sweep(System &g)
 
     if (do_vertex_only==1) return;
 
+    /*** Nucleate/dissolve trimers of dimers (the minimal closed unit, or a
+     * pendant one attached to the rest of the assembly by a single vertex)
+     * ***/
+    // Off by default: this is the only move that can destroy the base
+    // triangular face entirely, and with typical mu values that is highly
+    // favorable (see attempt_remove_trimer_dimer), so enabling it changes
+    // the qualitative behavior of any simulation that currently relies on
+    // the seed structure never fully disappearing. Existing configs that
+    // don't set allow_trimer_moves are completely unaffected.
+    if (allow_trimer_moves)
+    {
+        if (gsl_rng_uniform(rg) < ks0)
+        {
+            int tt = attempt_add_trimer_dimer(g);
+            if (tt > 0)
+                trimeradded++;
+        }
+        if (gsl_rng_uniform(rg) < ks0)
+        {
+            int tt = attempt_remove_trimer_dimer(g);
+            if (tt > 0)
+                trimerremoved++;
+        }
+        // every move below this point assumes g.Nhe>=6
+        if (g.Nhe == 0)
+        {
+            return;
+        }
+    }
+
+    /*** Add/remove a "bridge" monomer: a single vertex bonded to 2 existing
+     * vertices via 2 plain dimer edges, with no closing edge and no
+     * adjacent triangular face on either side of either edge. This is a
+     * distinct case from the trimer moves above -- attempt_remove_trimer_dimer
+     * (and attempt_remove_monomer_dimer) both require at least one face to
+     * anchor their placement/energy calculations on, which a heavily eroded
+     * remnant can genuinely lack (see attempt_remove_monomer_bridge). Off by
+     * default for the same reason as allow_trimer_moves. ***/
+    if (allow_bridge_moves)
+    {
+        if (allow_bridge_add_moves && gsl_rng_uniform(rg) < ks0)
+        {
+            int tt = attempt_add_monomer_bridge(g);
+            if (tt > 0)
+                bridgeadded++;
+        }
+        if (gsl_rng_uniform(rg) < ks0)
+        {
+            int tt = attempt_remove_monomer_bridge(g);
+            if (tt > 0)
+                bridgeremoved++;
+        }
+        if (g.Nhe == 0)
+        {
+            return;
+        }
+    }
+
     /*** Conformational change ***/
     if (g.Nhe==6){
         int ind = gsl_rng_uniform_int(rg, g.boundary.size());
@@ -406,10 +467,25 @@ void MC::sweep(System &g)
                 int indbt = gsl_rng_uniform_int(rg, g.boundary.size());
                 int hhbt = g.boundary[indbt];
                 cc = attempt_bind_triangle(g, hhbt);
+                // attempt_bind_triangle mutates (and calls update_boundary()
+                // internally) regardless of whether it ends up accepting or
+                // rejecting -- on rejection it manually restores the
+                // boundary-chain fields (boundary_index/previd_boundary/
+                // nextid_boundary) but never re-runs update_boundary(), so
+                // derived per-vertex fields (heboundaryoutid,
+                // heboundaryoutid2, doubleboundary) are left reflecting the
+                // tentatively-closed topology instead of the restored one.
+                // Those are exactly what attempt_fission/attempt_wedge_fission
+                // key their own vertex selection and reject-path restoration
+                // on, so a stale value here can silently corrupt the
+                // boundary chain much later, in an unrelated move. Calling
+                // update_boundary() unconditionally (matching every other
+                // move in this function) keeps those fields honest either
+                // way.
+                g.update_boundary();
                 if (cc > 0)
                 {
                     cout << "bound triangle" << endl;
-                    g.update_boundary();
                     boundtri += cc;
                 }
             }
@@ -422,10 +498,10 @@ void MC::sweep(System &g)
                 int indut = gsl_rng_uniform_int(rg, g.Nhe);
                 int hhut = g.he[indut].id;
                 int uu = attempt_unbind_triangle(g, hhut);
+                g.update_boundary();
                 if (uu > 0)
                 {
                     cout << "unbound triangle" << endl;
-                    g.update_boundary();
                     unboundtri += uu;
                 }
             }
@@ -465,7 +541,7 @@ void MC::sweep(System &g)
                     }
                 }
 
-                if (g.Nhe > minhe_fission && g.Nsurf > 3){ // dont try if only last triangle is open
+                if (g.Nsurf > 3){ // dont try if only last triangle is open
 
                     int movetype = gsl_rng_uniform_int(rg, 4);
                     switch (movetype)
@@ -2006,11 +2082,19 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
     g.update_half_edge(heid0);
     int heindex0 = g.heidtoindex[heid0]; // index of this edge
     //int heid0type=g.he[heindex0].type;
-    if ((g.he[heindex0].nextid != -1) || (g.he[heindex0].previd != -1))
-    {
-        if(debug_dimer_drug_removal==1) std::cout << " has next or previous cannot remove" << endl;
-        return -1;
-    }
+    // heid0 being on the boundary only guarantees ONE of nextid/previd is -1
+    // (see is_boundary); the other may be a real lateral bending-energy
+    // partner -- heid0.nextid!=-1 means dimer_bend_energy(heindex0) itself
+    // is already nonzero (computed from heid0's own nextid), while
+    // heid0.previd!=-1 means the edge AT heid0.previd has heid0 as ITS OWN
+    // nextid, so IT (not heid0) carries the nonzero dimer_bend_energy.
+    // Previously excluded outright; now handled below by including whichever
+    // side applies in gbb/de and clearing the reciprocal reference once
+    // heid0 is deleted (same reasoning as heid_prev_boundary's own
+    // entanglement, handled further down in the "remove dimer with next"
+    // branch).
+    int heid0_selfnext = g.he[heindex0].nextid; // -1 unless heid0 itself has a real bending partner via nextid
+    int heid0_selfprev = g.he[heindex0].previd;  // -1 unless heid0 itself has a real bending partner via previd
 
     int bi = g.he[heindex0].boundary_index;
     if (bi == -1)
@@ -2028,8 +2112,17 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
     //std::cout << " nextopid0 " << nextopid0 << " prevopid0 " <<prevopid0 <<endl;
     if ((nextopid0 == -1) || (prevopid0 == -1))
     {
-        std::cout << "wrong geometry" << endl;
-        std::exit(-1);
+        // heid0's own opposite isn't part of a complete closed face either
+        // (both nextid and previd need to be real for it to have one) --
+        // removal isn't well-defined via this edge at all (neither the
+        // "delete monomer" nor "delete dimer" logic below has a face to
+        // work from). On a heavily eroded remnant this can genuinely
+        // happen for a boundary edge picked at random (matches the
+        // "LBF 3/6/26" precedent further down in this function: reject
+        // the move, don't kill the whole simulation over an edge that
+        // just isn't removable this way right now).
+        if(debug_dimer_drug_removal==1) std::cout << "wrong geometry, no complete face on opposite side -- rejecting" << endl;
+        return -1;
     }
     int nextopindex0 = g.heidtoindex[nextopid0]; // id of prev of opposite edge
     int prevopindex0 = g.heidtoindex[prevopid0];
@@ -2090,8 +2183,11 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
         double de = -(g.stretch_energy(heindex0));
         int nextboundary0 = g.he[heindex0].nextid_boundary;
         int prevboundary0 = g.he[heindex0].previd_boundary;
-        //if (g.he[heindex0].previd!=-1) { de-=g.dimer_bend_energy(g.get_heindex(g.he[heindex0].previd)); }
-        //if (g.he[heindex0].nextid!=-1) {de-=g.dimer_bend_energy(heindex0); }
+        // heid0 itself may carry a real lateral bending-energy partner (see
+        // heid0_selfnext/heid0_selfprev at the top of this function) --
+        // include it here since heid0 is deleted in this branch too.
+        if (heid0_selfprev != -1) { de -= g.dimer_bend_energy(g.heidtoindex[heid0_selfprev]); }
+        if (heid0_selfnext != -1) { de -= g.dimer_bend_energy(heindex0); }
         de -= (g.dimer_bend_energy(heopindex0) + g.dimer_bend_energy(prevopindex0));
         //de -= g.bend_energy(nextopindex0) + g.bend_energy(prevopindex0); //g.monomer_energy(heid0);
 
@@ -2165,6 +2261,16 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             //std::cout << " 004 g.Nd is " <<g.Nd<<endl;
 //            std::cout << "updating index after removing monomer (l 2092)" << std::endl;
             g.update_index();
+            // heid0 is gone; clear whichever reciprocal reference it had
+            // (see heid0_selfnext/heid0_selfprev above).
+            if (heid0_selfnext != -1)
+            {
+                g.he[g.heidtoindex[heid0_selfnext]].previd = -1;
+            }
+            if (heid0_selfprev != -1)
+            {
+                g.he[g.heidtoindex[heid0_selfprev]].nextid = -1;
+            }
             g.update_neigh_vertex(vidin);
             g.update_neigh_vertex(vidout);
 
@@ -2196,8 +2302,19 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
         int heindex_next_boundary = g.heidtoindex[heid_next_boundary];
         //double *vco=new double[3];
         //remove dimer
-        if (g.is_boundary(heid_prev_boundary) > 0 && g.he[heindex_prev_boundary].previd == -1 && g.v[g.vidtoindex[g.he[heindex0].vin]].doubleboundary==-1) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)  there should be nno bonds between this and previous
+        // heid_prev_boundary.previd!=-1 means it's laterally bonded to
+        // another edge (xid below) rather than being fully free-standing --
+        // previously excluded here entirely (forcing a fall-through to the
+        // "remove dimer with previous" branch below, which checks the wrong
+        // vertex for exclusivity in that case and rejects). The commented-out
+        // block a few lines down (gbb+=find_dg(...); de-=dimer_bend_energy(xindex);)
+        // shows this was a recognized, half-drafted gap. Handled properly
+        // now: xid's own contribution is added to gbb/de below, and its
+        // stale nextid reference into heid_prev_boundary (which this move
+        // deletes) is cleared once the deletion is complete.
+        if (g.is_boundary(heid_prev_boundary) > 0 && g.v[g.vidtoindex[g.he[heindex0].vin]].doubleboundary==-1) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)  there should be nno bonds between this and previous
         {
+            int xid_extra = g.he[heindex_prev_boundary].previd; // -1 unless heid_prev_boundary is laterally bonded
             //std::cout << "00 remove dimer with next (previd_boundary) "<<endl;  //remove this and previd_boundary=heid_prev_boundary
             if (g.he[heindex_prev_boundary].din == 1 || g.he[nextopindex0].din == 1)
             {
@@ -2227,13 +2344,31 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 de -= (g.dimer_bend_energy(heopindex0));
                 de -= (g.dimer_bend_energy(nextopindex0) + g.dimer_bend_energy(prevopindex0));
             }
-            //if (yid!=-1) {  de-=g.dimer_bend_energy(heindex0);}
 
-            //if (xid!=-1 && g.he[xindex].nextid==heid_prev_boundary) {
-            //    gbb+=g.find_dg( g.he[xindex].type,g.he[g.heidtoindex[heid_prev_boundary]].type);
-            //     de-=g.dimer_bend_energy(xindex);
-            //xidconnect=1;
-            //}
+            // heid_prev_boundary is laterally bonded to xid_extra (xid_extra
+            // is its "previous" neighbor -- see is_bond_in_boundary): that
+            // bond's binding and bending contributions disappear along with
+            // heid_prev_boundary, so they must be included here too.
+            if (xid_extra != -1)
+            {
+                int xindex_extra = g.heidtoindex[xid_extra];
+                gbb += g.find_dg(g.he[xindex_extra].type, g.he[heindex_prev_boundary].type, g.he[heindex_prev_boundary].din);
+                de -= g.dimer_bend_energy(xindex_extra);
+            }
+            // Same for heid0's own lateral bond, if any (heid0_selfnext/
+            // heid0_selfprev, from the top of this function) -- heid0 is
+            // deleted in this branch too.
+            if (heid0_selfnext != -1)
+            {
+                gbb += g.find_dg(g.he[heindex0].type, g.he[g.heidtoindex[heid0_selfnext]].type, g.he[g.heidtoindex[heid0_selfnext]].din);
+                de -= g.dimer_bend_energy(heindex0);
+            }
+            if (heid0_selfprev != -1)
+            {
+                int pindex_extra = g.heidtoindex[heid0_selfprev];
+                gbb += g.find_dg(g.he[pindex_extra].type, g.he[heindex0].type, g.he[heindex0].din);
+                de -= g.dimer_bend_energy(pindex_extra);
+            }
 
             
             /* test !!!!
@@ -2276,9 +2411,8 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             }
             else{
                 double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
-                crit = exp(-de / g.T) / (2 * vp); 
+                crit = exp(-de / g.T) / (2 * vp);
             }
-            //std::cout << " crit is " << crit << endl;
             if (gsl_rng_uniform(rg) < crit) //delete dimer this and next (inside)(nextopindex) / this and prev (on boundary)
             {
                 int nextidboundary0 = g.he[g.heidtoindex[heid0]].nextid_boundary;
@@ -2333,6 +2467,21 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
 
 //                std::cout << "updating index after removing vertex in remove dimer (l 2238)" << std::endl;
                 g.update_index();
+                // heid_prev_boundary is gone; clear xid_extra's now-stale
+                // reference to it (see the energy accounting above).
+                if (xid_extra != -1)
+                {
+                    g.he[g.heidtoindex[xid_extra]].nextid = -1;
+                }
+                // heid0 is gone too; clear its own reciprocal reference.
+                if (heid0_selfnext != -1)
+                {
+                    g.he[g.heidtoindex[heid0_selfnext]].previd = -1;
+                }
+                if (heid0_selfprev != -1)
+                {
+                    g.he[g.heidtoindex[heid0_selfprev]].nextid = -1;
+                }
                 for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
                 {
                     g.update_neigh_vertex(*it);
@@ -2582,8 +2731,13 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
     //std::cout << " nextopid0 " << nextopid0 << " prevopid0 " <<prevopid0 <<endl;
     if ((nextopid0 == -1) || (prevopid0 == -1))
     {
-        std::cout << "wrong geometry" << endl;
-        std::exit(-1);
+        // See the non-drug attempt_remove_monomer_dimer's identical check:
+        // heid0's own opposite isn't part of a complete closed face, so
+        // removal isn't well-defined via this edge -- reject rather than
+        // kill the simulation (can genuinely happen on a heavily eroded
+        // remnant for a randomly-picked boundary edge).
+        if(debug_dimer_drug_removal==1) std::cout << "wrong geometry, no complete face on opposite side -- rejecting" << endl;
+        return -1;
     }
     int nextopindex0 = g.heidtoindex[nextopid0]; // id of prev of opposite edge
     int prevopindex0 = g.heidtoindex[prevopid0];
@@ -3077,7 +3231,6 @@ int MC::attempt_wedge_fusion(System &g)
     int nextidboundary0 = g.he[heindex_prev].nextid_boundary;
     int previdboundary0 = g.he[heindex_next].previd_boundary;
 
-    int bi = g.he[heindex_next].boundary_index;
     //std::cout << "wedge fusion pair chosen" <<endl;
 
     int heidm = g.he[heindex_next].nextid;
@@ -3110,6 +3263,34 @@ int MC::attempt_wedge_fusion(System &g)
     {
         return -1;
     }
+
+    // Snapshot heid_prev/heid_next/heidm's boundary-chain bookkeeping
+    // (boundary_index, previd_boundary, nextid_boundary) before any
+    // mutation below touches them. Nothing between here and the
+    // accept/reject decision ever writes these 3 fields for any of the 3
+    // edges (only their front-face nextid/previd, via set_prev_next, and
+    // vidi/vidj's own edges' vin/vout), so these snapshots are exactly
+    // their pre-attempt values.
+    //
+    // The previous reject-path logic tried to *reconstruct* these fields
+    // from scratch (assigning bi to each edge's boundary_index and
+    // re-splicing previdboundary0->heid_next->heidm->heid_prev->nextidboundary0
+    // via set_prev_next_boundary), which assumed heidm is a genuine
+    // boundary-loop member on the side that gets reset -- but heidm is
+    // only ever found via a pre-existing *front* link to heid_next or
+    // heid_prev (see bondnextm/bondmprev above), so its real
+    // previd_boundary/nextid_boundary/boundary_index depend on facts this
+    // function doesn't have enough information to re-derive in general.
+    // Restoring the exact snapshot instead of re-deriving it sidesteps
+    // that entirely and is correct regardless (confirmed via
+    // test_mod_salt_disassemble.in, which reproducibly hit "error in
+    // boundary index" from this exact path before this fix).
+    int heidprevindex_snap = g.heidtoindex[heid_prev];
+    int heidnextindex_snap = g.heidtoindex[heid_next];
+    int heidmindex_snap = g.heidtoindex[heidm];
+    int snap_bi[3] = {g.he[heidprevindex_snap].boundary_index, g.he[heidnextindex_snap].boundary_index, g.he[heidmindex_snap].boundary_index};
+    int snap_prevb[3] = {g.he[heidprevindex_snap].previd_boundary, g.he[heidnextindex_snap].previd_boundary, g.he[heidmindex_snap].previd_boundary};
+    int snap_nextb[3] = {g.he[heidprevindex_snap].nextid_boundary, g.he[heidnextindex_snap].nextid_boundary, g.he[heidmindex_snap].nextid_boundary};
 
     // now save th status
     //std::cout << "heid_prev " << heid_prev << " heid_next " << heid_next<< "heidm" << heidm <<endl;
@@ -3325,23 +3506,22 @@ int MC::attempt_wedge_fusion(System &g)
             g.he[g.heidtoindex[heidm]].nextid = -1;
         }
         //std::cout<<"attempt_vertex_fusion not accepted" <<endl;
-        //std::cout <<"update boundary_index"<<endl;
-        g.he[g.heidtoindex[heidm]].boundary_index = bi;
-        g.he[g.heidtoindex[heid_prev]].boundary_index = bi;
-        g.he[g.heidtoindex[heid_next]].boundary_index = bi;
+        // Restore heid_prev/heid_next/heidm's boundary-chain bookkeeping
+        // (and whatever they're linked to, e.g. previdboundary0/
+        // nextidboundary0) to their exact pre-attempt values -- see the
+        // snapshot taken above for why this replaces the previous
+        // re-derivation-based restore.
+        g.he[g.heidtoindex[heid_prev]].boundary_index = snap_bi[0];
+        g.he[g.heidtoindex[heid_prev]].previd_boundary = snap_prevb[0];
+        g.he[g.heidtoindex[heid_prev]].nextid_boundary = snap_nextb[0];
 
-        //
+        g.he[g.heidtoindex[heid_next]].boundary_index = snap_bi[1];
+        g.he[g.heidtoindex[heid_next]].previd_boundary = snap_prevb[1];
+        g.he[g.heidtoindex[heid_next]].nextid_boundary = snap_nextb[1];
 
-        //update boundary nextid
-        //std::cout <<"update boundary_nextid 0"<<endl;
-        g.set_prev_next_boundary(previdboundary0, heid_next);
-        //std::cout <<"update boundary_nextid 1"<<endl;
-        g.set_prev_next_boundary(heid_next, heidm);
-
-        g.set_prev_next_boundary(heidm, heid_prev);
-        //std::cout <<"update boundary_nextid "<<endl;
-
-        g.set_prev_next_boundary(heid_prev, nextidboundary0);
+        g.he[g.heidtoindex[heidm]].boundary_index = snap_bi[2];
+        g.he[g.heidtoindex[heidm]].previd_boundary = snap_prevb[2];
+        g.he[g.heidtoindex[heidm]].nextid_boundary = snap_nextb[2];
 
         //std::cout << "fusion not accepted deleting  newvid "<< newvid << endl;
         //vector<int> vecupdate;
@@ -4254,7 +4434,6 @@ int MC::attempt_change_edge_type(System &g, int heid0)
 /*************************************/
 int MC::attempt_fusion(System &g)
 {
-
     //std::cout << "in attempt_fusion " << endl;
     //if (is_bond_vboundary(vid0)>0) return -1;
 
@@ -4765,6 +4944,21 @@ int MC::attempt_fission(System &g)
         return -1;
     } // vertex should be bound
 
+    {
+        // vid0 is a "doubleboundary" vertex where 2 boundary loops meet.
+        // The vertex-splitting surgery below assumes both loops are normal,
+        // well-connected shell fragments -- not true if one of them is an
+        // isolated pendant trimer's own loop (attempt_add_trimer_dimer),
+        // whose "other half" is just 2 leaf vertices. Reject rather than
+        // corrupt the boundary chain (nothing mutated yet).
+        int vindex0check = g.vidtoindex[vid0];
+        if (is_pendant_boundary_loop(g, g.v[vindex0check].heboundaryoutid) ||
+            is_pendant_boundary_loop(g, g.v[vindex0check].heboundaryoutid2))
+        {
+            return -1;
+        }
+    }
+
     if (g.he[g.heidtoindex[heid_prev]].boundary_index != g.he[g.heidtoindex[heid_next]].boundary_index)
     {
         // Nothing has been mutated yet, so it's safe to just reject this
@@ -4885,11 +5079,14 @@ int MC::attempt_fission(System &g)
     //std::cout << "in fission now transfer edges of the heid_prev side" <<endl;
     int yid = heid_prev;
     int yidopid = g.he[g.heidtoindex[yid]].opid;
-    if (g.is_boundary(yidopid) > 0)
-    {
-        std::cout << "error in fssion wrong geometry" << endl;
-        std::exit(-1);
-    } //temp test
+    // The loop below recomputes this exact yidopid on its first pass (line
+    // "yidopid = g.he[g.heidtoindex[yid]].opid" just inside the loop, same
+    // yid) and already treats is_boundary(yidopid)>0 as its own normal
+    // single-iteration exit condition (see the break a few lines down) --
+    // so this was a redundant duplicate check that just hard-exited
+    // instead of letting the loop handle it the same way it handles every
+    // other iteration. Removed rather than worked around: there's nothing
+    // here to reject or roll back, the loop already does the right thing.
     while (true)
     {
         //std::cout << "updating vout of yid " << yid << " to " << newvid_prev << endl;
@@ -5133,7 +5330,7 @@ int MC::attempt_fission(System &g)
 
         std::cout << "done updating index and neigh vertices" << std::endl;
 
-        
+
         /*
             g.check_odd_neigh();
             
@@ -5542,7 +5739,7 @@ int MC::attempt_unbind_triangle(System &g, int heid0)
     }
     else
     {
-        std::cout << "Did not unbind triangle! crit is " << crit << endl;
+        //std::cout << "Did not unbind triangle! crit is " << crit << endl;
         return (-1);
     }
     return (-1);
@@ -5693,6 +5890,1204 @@ int MC::attempt_remove_drug(System &g, int heid0)
         return 0;
     }
 }
+bool MC::is_pendant_boundary_loop(System &g, int heid0)
+{
+    // True if the boundary loop starting at heid0 is an isolated pendant
+    // trimer's own 3-edge loop (see attempt_remove_trimer_dimer): a closed
+    // triangle where 2 of its 3 vertices are private (touch nothing else).
+    // Used to keep moves that do vertex-splitting/merging surgery based on
+    // a "doubleboundary" vertex (e.g. attempt_fission) from operating on a
+    // pendant's shared vertex, where one of the two loops is not a normal,
+    // well-connected shell fragment but a 2-vertex leaf.
+    if (heid0 == -1)
+    {
+        return false;
+    }
+    int i0 = g.heidtoindex[heid0];
+    int next1 = g.he[i0].nextid_boundary;
+    if (next1 == -1)
+    {
+        return false;
+    }
+    int i1 = g.heidtoindex[next1];
+    int next2 = g.he[i1].nextid_boundary;
+    if (next2 == -1)
+    {
+        return false;
+    }
+    int i2 = g.heidtoindex[next2];
+    if (g.he[i2].nextid_boundary != heid0)
+    {
+        return false; // not a 3-cycle
+    }
+
+    int vA = g.he[i0].vin;
+    int vB = g.he[i1].vin;
+    int vC = g.he[i2].vin;
+    int privateCount = 0;
+    if (g.v[g.vidtoindex[vA]].hein.size() == 2) privateCount++;
+    if (g.v[g.vidtoindex[vB]].hein.size() == 2) privateCount++;
+    if (g.v[g.vidtoindex[vC]].hein.size() == 2) privateCount++;
+    return privateCount >= 2;
+}
+
+int MC::attempt_add_trimer_dimer(System &g)
+{
+    // A trimer of dimers -- one closed triangular face made of 3 dimer
+    // edges -- is the smallest structure the half-edge mesh can represent
+    // (every other move in this file requires an existing face to grow
+    // from/shrink into). This move either nucleates one out of nothing
+    // (when the system is empty), or attaches a new one to a single
+    // existing vertex -- a "pendant" triangle connected to the rest of the
+    // assembly by that one shared vertex, which is exactly the kind of
+    // structure attempt_remove_trimer_dimer can take apart. Reverse move:
+    // attempt_remove_trimer_dimer.
+
+    // Draw a random type for each of the 3 new dimer edges. Like every
+    // other add/remove pair in this file (attempt_add_monomer_dimer,
+    // attempt_add_dimer's random type draw, etc.), this is NOT given a
+    // matching 1/4-per-choice correction in the acceptance ratio below --
+    // none of the existing moves that draw a random edge type do either
+    // (grep every "crit =" in this file: the only extra factors are the
+    // occasional plain 2, never a 4, 16, 64, ...). Matching that convention
+    // here keeps this move on the same footing as the rest of the model.
+    int etype0 = gsl_rng_uniform_int(rg, 4);
+    int etype1 = gsl_rng_uniform_int(rg, 4);
+    int etype2 = gsl_rng_uniform_int(rg, 4);
+
+    int vidV = -1;    // the anchor vertex; -1 until we know whether it's reused or newly created
+    int vindexV = -1; // stays -1 exactly when V is being created fresh (the Nv==0 case)
+    double Vco[3] = {0, 0, 0};
+    double nA[3], uA[3]; // local frame at the anchor: nA is "outward", uA the in-plane axis
+
+    if (g.Nv == 0)
+    {
+        // Nucleating from nothing: no reference direction exists, so just
+        // use the global axes. This reproduces the original bootstrap
+        // geometry (and make_initial_triangle's) exactly.
+        nA[0] = 1; nA[1] = 0; nA[2] = 0;
+        uA[0] = 0; uA[1] = 1; uA[2] = 0;
+    }
+    else
+    {
+        // Attach to a uniformly random EXISTING vertex that isn't already
+        // too highly coordinated to take on 2 more bonds (matches the
+        // max-degree-6 convention used elsewhere, e.g.
+        // attempt_add_monomer_dimer's "hein.size() < 6" checks: after
+        // attaching, degree grows by exactly 2).
+        //
+        // Attaching to a vertex already on the assembly's boundary gives it
+        // a second, independent boundary loop (the pendant's own open
+        // back) -- a "doubleboundary" vertex. That's fine on its own; the
+        // actual danger is attempt_fission, which treats ANY doubleboundary
+        // vertex as a genuine pinch point in a partially-disassembled shell
+        // and splits it assuming both halves are normal, well-connected
+        // mesh fragments -- not true when one "half" is just the pendant's
+        // 2 leaf vertices. That specific interaction is guarded directly in
+        // attempt_fission (see is_pendant_boundary_loop) rather than by
+        // restricting attachment here: requiring a fully interior anchor
+        // was tried and rejected -- real interior vertices in a closed
+        // patch have degree 5-6 to close the angular disk around them,
+        // which is incompatible with the degree<=3 cap above, so combining
+        // both requirements left virtually no eligible vertex in practice.
+        vector<int> eligible;
+        for (int vi = 0; vi < g.Nv; vi++)
+        {
+            if ((int)g.v[vi].hein.size() <= 3)
+            {
+                eligible.push_back(vi);
+            }
+        }
+        if (eligible.empty())
+        {
+            return -1;
+        }
+        vindexV = eligible[gsl_rng_uniform_int(rg, eligible.size())];
+        vidV = g.v[vindexV].vid;
+        Vco[0] = g.v[vindexV].co[0];
+        Vco[1] = g.v[vindexV].co[1];
+        Vco[2] = g.v[vindexV].co[2];
+
+        // Outward direction: away from the average position of the
+        // vertex's actual bonded neighbors (found via hein -- vneigh here
+        // means "nearby but NOT bonded", used only for overlap checks, not
+        // mesh topology).
+        double avg[3] = {0, 0, 0};
+        int nn = (int)g.v[vindexV].hein.size();
+        for (int k = 0; k < nn; k++)
+        {
+            int heid = g.v[vindexV].hein[k];
+            int nvid = g.he[g.heidtoindex[heid]].vin;
+            double *nco = g.v[g.vidtoindex[nvid]].co;
+            avg[0] += nco[0];
+            avg[1] += nco[1];
+            avg[2] += nco[2];
+        }
+        double nlen = 0;
+        if (nn > 0)
+        {
+            avg[0] /= nn; avg[1] /= nn; avg[2] /= nn;
+            subvec(avg, Vco, nA); // nA = Vco - avg
+            nlen = norm(nA);
+        }
+        if (nn == 0 || nlen < 1e-8)
+        {
+            nA[0] = 0; nA[1] = 0; nA[2] = 1; // degenerate/no-neighbor fallback
+        }
+        else
+        {
+            nA[0] /= nlen; nA[1] /= nlen; nA[2] /= nlen;
+        }
+
+        double helper[3] = {1, 0, 0};
+        if (fabs(nA[0]) > 0.9)
+        {
+            helper[0] = 0; helper[1] = 1; helper[2] = 0;
+        }
+        cross(helper, nA, uA);
+        double ulen = norm(uA);
+        uA[0] /= ulen; uA[1] /= ulen; uA[2] /= ulen;
+    }
+
+    // Place the 3 corners on a unit triangle in the (nA, uA) plane anchored
+    // at V -- the same reference geometry make_initial_triangle uses,
+    // just expressed in a local frame instead of the global axes. V itself
+    // is the first corner (local offset (0,0)).
+    double pts[3][3];
+    double localx = 0, localy = 0;
+    for (int i = 0; i < 3; i++)
+    {
+        pts[i][0] = Vco[0] + localx * nA[0] + localy * uA[0];
+        pts[i][1] = Vco[1] + localx * nA[1] + localy * uA[1];
+        pts[i][2] = Vco[2] + localx * nA[2] + localy * uA[2];
+        localx = cos(i * M_PI / 3.0);
+        localy = sin(i * M_PI / 3.0);
+    }
+
+    // Reject if either of the 2 new vertices would land on top of existing
+    // structure (nothing to check against in the Nv==0 case).
+    if (vidV != -1)
+    {
+        if (g.check_overlap_centerv(pts[1]) < 0 || g.check_overlap_centerv(pts[2]) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (vidV == -1)
+    {
+        g.add_vertex(pts[0]);
+        vidV = g.v[g.Nv - 1].vid;
+    }
+    g.add_vertex(pts[1]);
+    int vidB = g.v[g.Nv - 1].vid;
+    g.add_vertex(pts[2]);
+    int vidC = g.v[g.Nv - 1].vid;
+
+    // Close the face with 3 new dimer edges. add_edge_type also creates the
+    // opposite (currently unbound, boundary-facing) half-edge of each.
+    int heid0 = g.Nhelast;
+    g.add_edge_type(vidV, vidB, etype0);
+    int heid1 = g.Nhelast;
+    g.add_edge_type(vidB, vidC, etype1);
+    int heid2 = g.Nhelast;
+    g.add_edge_type(vidC, vidV, etype2);
+    int Nlast = g.Nhelast;
+
+    g.set_prev_next(heid0, heid2, heid1);
+    g.set_prev_next(heid1, heid0, heid2);
+    g.set_prev_next(heid2, heid1, heid0);
+
+    for (int i = 0; i < 6; i++)
+    {
+        g.update_half_edge(Nlast - 6 + i);
+    }
+
+    // Elastic energy of the 3 new edges only. Their opposites are unbound,
+    // so bend_energy is 0 for all of them regardless of what the rest of
+    // the mesh looks like, and nothing about V's other, pre-existing edges
+    // is touched by these brand-new half-edge ids -- so this incremental
+    // sum is exactly equal to the full before/after energy difference (see
+    // the matching note in attempt_remove_trimer_dimer), without having to
+    // pay for a full g.compute_energy() over a potentially large mesh.
+    double de = g.stretch_energy(g.heidtoindex[heid0]) + g.dimer_bend_energy(g.heidtoindex[heid0]);
+    de += g.stretch_energy(g.heidtoindex[heid1]) + g.dimer_bend_energy(g.heidtoindex[heid1]);
+    de += g.stretch_energy(g.heidtoindex[heid2]) + g.dimer_bend_energy(g.heidtoindex[heid2]);
+
+    double gbb = g.find_gbb(etype0, etype1, etype2);
+    double mu_sum = g.mu[etype0] + g.mu[etype1] + g.mu[etype2];
+    de += gbb - mu_sum;
+
+    // Metropolis criterion: dE is the full grand-potential change (elastic
+    // energy of the new face, plus its binding free energy, minus the
+    // chemical potential of the 3 dimers drawn from the bulk reservoir).
+    double crit = exp(-de / g.T);
+
+    if (g.Test_assembly == 1)
+    {
+        crit = 1;
+    }
+
+    if (gsl_rng_uniform(rg) < crit)
+    {
+        // Give the new face's own open back a fresh, self-contained
+        // boundary loop of its 3 edges. They must be linked in the
+        // direction opposite to the front face's own traversal -- see the
+        // derivation in attempt_remove_trimer_dimer's header comment.
+        int op0 = g.he[g.heidtoindex[heid0]].opid;
+        int op1 = g.he[g.heidtoindex[heid1]].opid;
+        int op2 = g.he[g.heidtoindex[heid2]].opid;
+        int bi = g.Nboundarylast;
+        g.he[g.heidtoindex[op0]].boundary_index = bi;
+        g.he[g.heidtoindex[op1]].boundary_index = bi;
+        g.he[g.heidtoindex[op2]].boundary_index = bi;
+        g.set_prev_next_boundary(op0, op2);
+        g.set_prev_next_boundary(op2, op1);
+        g.set_prev_next_boundary(op1, op0);
+        if (vindexV == -1)
+        {
+            // Nucleating from nothing: Nboundary's "empty" baseline is 1
+            // (System::initialize()'s default, also what
+            // attempt_remove_trimer_dimer's full-dissolve path restores),
+            // not 0, so set it directly here rather than incrementing.
+            g.Nboundary = 1;
+        }
+        else
+        {
+            g.Nboundary++;
+        }
+        g.Nboundarylast++;
+
+        g.update_index();
+        g.update_boundary();
+        g.update_neigh_vertex(vidV);
+        g.update_neigh_vertex(vidB);
+        g.update_neigh_vertex(vidC);
+
+        std::cout << (vindexV == -1 ? "trimer of dimers nucleated!" : "pendant trimer of dimers attached!") << endl;
+        return 1;
+    }
+
+    // Rejected: undo. delete_edge requires an already-unbound half-edge, so
+    // pass the opposite (id+1) of each front edge we just linked; delete in
+    // descending id/vid order so heidtoindex/vidtoindex stay valid for
+    // entries not yet processed (erase() shifts every later vector entry
+    // down by however many are removed).
+    g.delete_edge(heid2 + 1);
+    g.delete_edge(heid1 + 1);
+    g.delete_edge(heid0 + 1);
+    g.delete_vertex(vidC);
+    g.delete_vertex(vidB);
+    if (vindexV == -1)
+    {
+        // V was created fresh for this attempt (the nucleate-from-nothing
+        // case); undo it too. If V was an existing vertex we attached to,
+        // it must be left untouched.
+        g.delete_vertex(vidV);
+    }
+    g.update_index();
+    g.update_boundary();
+
+    return -1;
+}
+
+int MC::attempt_remove_trimer_dimer(System &g)
+{
+    // Reverse of attempt_add_trimer_dimer. Looks for any closed triangular
+    // face whose 3 edges are not shared with any other face (i.e. each
+    // edge's opposite is still a plain, unbound boundary half-edge -- this
+    // face doesn't have a neighboring face fused onto one of its own
+    // edges), and which is either:
+    //   (a) the entire system (all 3 vertices touch nothing else) -- the
+    //       reverse of nucleating from nothing, or
+    //   (b) a "pendant" attached to the rest of the assembly by exactly one
+    //       shared vertex (the other 2 vertices touch nothing else) -- the
+    //       reverse of attaching to an existing vertex.
+    // A candidate whose vertices are shared with the rest of the assembly
+    // by 2 or 3 of its corners is not handled (out of scope; such a face is
+    // an ordinary internal part of a bigger shell, not a pendant trimer).
+
+    struct Candidate
+    {
+        int h0, h1, h2; // heindex of the 3 front edges, in cyclic order
+        bool isolated;  // true: case (a); false: case (b), a pendant
+        int sharedVid;  // valid only when !isolated
+    };
+    vector<Candidate> candidates;
+
+    for (int i = 0; i < g.Nhe; i++)
+    {
+        if (g.he[i].nextid == -1)
+        {
+            continue; // not part of a closed face
+        }
+        int i1 = g.heidtoindex[g.he[i].nextid];
+        int i2 = g.heidtoindex[g.he[i1].nextid];
+        if (g.he[i2].nextid != g.he[i].id)
+        {
+            continue; // not a 3-cycle (larger face, or malformed)
+        }
+        if (!(i <= i1 && i <= i2))
+        {
+            continue; // already counted starting from another edge of this same face
+        }
+        if (!(g.is_boundary(g.he[i].opid) > 0 && g.is_boundary(g.he[i1].opid) > 0 && g.is_boundary(g.he[i2].opid) > 0))
+        {
+            continue; // shares an edge with a neighboring face -- not an isolated trimer
+        }
+
+        int vA = g.he[i].vin;
+        int vB = g.he[i1].vin;
+        int vC = g.he[i2].vin;
+        bool privA = g.v[g.vidtoindex[vA]].hein.size() == 2;
+        bool privB = g.v[g.vidtoindex[vB]].hein.size() == 2;
+        bool privC = g.v[g.vidtoindex[vC]].hein.size() == 2;
+        int privateCount = (privA ? 1 : 0) + (privB ? 1 : 0) + (privC ? 1 : 0);
+
+        Candidate c;
+        c.h0 = i; c.h1 = i1; c.h2 = i2;
+        if (privateCount == 3)
+        {
+            if (g.Nv != 3 || g.Nhe != 6)
+            {
+                continue; // an isolated component coexisting with other structure -- unsupported
+            }
+            c.isolated = true;
+            c.sharedVid = -1;
+            candidates.push_back(c);
+        }
+        else if (privateCount == 2)
+        {
+            int sharedVid = !privA ? vA : (!privB ? vB : vC);
+            int sharedDeg = (int)g.v[g.vidtoindex[sharedVid]].hein.size();
+            // Removing the pendant drops the shared vertex's degree by 2;
+            // requiring >=4 here keeps it >=2 afterward (a vertex needs at
+            // least 2 edges to have a well-defined corner), and matches
+            // attempt_add_trimer_dimer's own eligibility filter
+            // (hein.size()<=3 before attaching, so degree<=5 after), so
+            // every state this move can reach was one attempt_add_trimer_dimer
+            // could have produced, and vice versa.
+            if (sharedDeg < 4)
+            {
+                continue;
+            }
+            c.isolated = false;
+            c.sharedVid = sharedVid;
+            candidates.push_back(c);
+        }
+        // else: 0 or 1 private vertices -- an ordinary face shared with the
+        // rest of the assembly by 2 or 3 corners; not handled by this move.
+    }
+
+    if (candidates.empty())
+    {
+        return -1;
+    }
+    Candidate c = candidates[gsl_rng_uniform_int(rg, candidates.size())];
+    int heindex0 = c.h0, heindex1 = c.h1, heindex2 = c.h2;
+
+    int etype0 = g.he[heindex0].type;
+    int etype1 = g.he[heindex1].type;
+    int etype2 = g.he[heindex2].type;
+
+    // Same incremental accounting as attempt_add_trimer_dimer: these 3
+    // edges are isolated (opposites unbound), so removing them can only
+    // change the energy by exactly their own stretch/dimer_bend
+    // contributions -- nothing else in the mesh (including whatever else
+    // touches the shared vertex, if any) depends on these specific
+    // half-edge ids.
+    double de = -(g.stretch_energy(heindex0) + g.dimer_bend_energy(heindex0));
+    de -= g.stretch_energy(heindex1) + g.dimer_bend_energy(heindex1);
+    de -= g.stretch_energy(heindex2) + g.dimer_bend_energy(heindex2);
+
+    double gbb = g.find_gbb(etype0, etype1, etype2);
+    double mu_sum = g.mu[etype0] + g.mu[etype1] + g.mu[etype2];
+    de += -gbb + mu_sum; // de = -de_add for this same triangle
+
+    double crit = exp(-de / g.T);
+
+    if (g.Test_assembly == 1)
+    {
+        crit = 1;
+    }
+
+    if (gsl_rng_uniform(rg) < crit)
+    {
+        int vid0 = g.he[heindex0].vin;
+        int vid1 = g.he[heindex1].vin;
+        int vid2 = g.he[heindex2].vin;
+
+        // delete_edge requires a half-edge that is already unbound
+        // (is_boundary()>0); the 3 front edges are bound to each other, so
+        // pass their (already-unbound) opposite half-edges instead --
+        // delete_edge removes both members of the pair together.
+        int hids[3] = {g.he[heindex0].opid, g.he[heindex1].opid, g.he[heindex2].opid};
+        for (int i = 0; i < 2; i++)
+            for (int j = 0; j < 2 - i; j++)
+                if (hids[j] < hids[j + 1])
+                {
+                    int tmp = hids[j];
+                    hids[j] = hids[j + 1];
+                    hids[j + 1] = tmp;
+                }
+        // For the pendant case, work out how the boundary chain needs to be
+        // spliced once these 3 edges are gone -- must be done now, using
+        // heindex0/1/2 (and heidtoindex) while they're still valid, since
+        // delete_edge's erase() calls below leave heidtoindex stale for
+        // every surviving edge until the update_index() call further down.
+        int opEnter = -1, opLeave = -1; // opposite edges entering/leaving c.sharedVid
+        int beforePendant = -1, afterPendant = -1;
+        bool selfContained = true;
+        // On a boundary half-edge, nextid/previd (when not -1) don't mirror
+        // the geometric perimeter-adjacency chain -- they record a real
+        // lateral dimer-dimer bond to the immediate neighbor on that side
+        // (see is_bond_in_boundary/is_bond_out_boundary: nextid!=-1 means
+        // "laterally bonded on my next side"), which is why
+        // update_boundary()'s validation requires nextid_boundary==nextid
+        // whenever nextid!=-1 -- a lateral bond partner must also be the
+        // geometric neighbor. If beforePendant/afterPendant were laterally
+        // bonded to one of the pendant's own edges (opLeave/opEnter), that
+        // bond simply ceases to exist once the pendant is gone -- it must
+        // be cleared (like attempt_remove_monomer_dimer does for the edges
+        // it detaches), not pointed at each other; beforePendant and
+        // afterPendant were never bonded to one another.
+        bool beforeChained = false, afterChained = false;
+        if (!c.isolated)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                int opidx = g.heidtoindex[hids[k]];
+                if (g.he[opidx].vout == c.sharedVid) opEnter = hids[k];
+                else if (g.he[opidx].vin == c.sharedVid) opLeave = hids[k];
+            }
+            beforePendant = g.he[g.heidtoindex[opLeave]].previd_boundary;
+            afterPendant = g.he[g.heidtoindex[opEnter]].nextid_boundary;
+            selfContained = (beforePendant == opEnter); // equivalently afterPendant == opLeave
+            if (!selfContained)
+            {
+                beforeChained = (g.he[g.heidtoindex[beforePendant]].nextid == opLeave);
+                afterChained = (g.he[g.heidtoindex[afterPendant]].previd == opEnter);
+            }
+        }
+
+        // delete in descending id order (see attempt_add_trimer_dimer's undo path)
+        g.delete_edge(hids[0]);
+        g.delete_edge(hids[1]);
+        g.delete_edge(hids[2]);
+
+        if (c.isolated)
+        {
+            int vids[3] = {vid0, vid1, vid2};
+            for (int i = 0; i < 2; i++)
+                for (int j = 0; j < 2 - i; j++)
+                    if (vids[j] < vids[j + 1])
+                    {
+                        int tmp = vids[j];
+                        vids[j] = vids[j + 1];
+                        vids[j + 1] = tmp;
+                    }
+
+            // See the pendant branch below for why: other, unrelated
+            // vertices nearby (this component is topologically isolated,
+            // but not necessarily far away in space) may have these 3
+            // vertices cached in their own vneigh lists.
+            vector<int> vecupdate;
+            for (int k = 0; k < 3; k++)
+            {
+                int vindexk = g.vidtoindex[vids[k]];
+                for (vector<int>::iterator it = g.v[vindexk].vneigh.begin(); it != g.v[vindexk].vneigh.end(); ++it)
+                {
+                    vecupdate.push_back(*it);
+                }
+            }
+
+            g.delete_vertex(vids[0]);
+            g.delete_vertex(vids[1]);
+            g.delete_vertex(vids[2]);
+
+            g.update_index();
+            g.update_boundary();
+            g.Nboundary = 1;
+            g.Nboundarylast = 0;
+            for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
+            {
+                if (*it != vids[0] && *it != vids[1] && *it != vids[2])
+                {
+                    g.update_neigh_vertex(*it);
+                }
+            }
+            std::cout << "trimer of dimers dissolved!" << endl;
+        }
+        else
+        {
+            int privateVids[2];
+            int pcount = 0;
+            if (vid0 != c.sharedVid) privateVids[pcount++] = vid0;
+            if (vid1 != c.sharedVid) privateVids[pcount++] = vid1;
+            if (vid2 != c.sharedVid) privateVids[pcount++] = vid2;
+            if (privateVids[0] < privateVids[1])
+            {
+                int tmp = privateVids[0];
+                privateVids[0] = privateVids[1];
+                privateVids[1] = tmp;
+            }
+
+            // A pendant created by attempt_add_trimer_dimer always gets its
+            // own fresh, self-contained boundary loop. But a pendant that
+            // arises naturally during disassembly (edge-by-edge removal
+            // from a larger shell) is often just a 3-edge *spur* within the
+            // same larger loop as the rest of the assembly, not a separate
+            // loop -- the loop enters the pendant through one of the shared
+            // vertex's two boundary edges and leaves through the other,
+            // then continues on into the main structure. opEnter/opLeave/
+            // beforePendant/afterPendant/selfContained (computed above,
+            // before the delete_edge calls, while heindex0/1/2 and
+            // heidtoindex were still valid for these ids) tell the two
+            // cases apart; in the spur case we splice the chain directly
+            // around the gap this removal leaves -- otherwise the edges
+            // flanking the pendant are left with a dangling
+            // nextid_boundary/previd_boundary reference to a half-edge that
+            // no longer exists (reproduced via test_mod_salt_disassemble.in:
+            // force-removing a real, naturally-arising pendant hit exactly
+            // this and crashed with "error in boundary index").
+
+            // Other, unrelated vertices nearby may have these 2 private
+            // vertices cached in their own vneigh ("nearby but not bonded")
+            // lists. Deleting them without refreshing those lists leaves
+            // dangling ids that check_overlap_g can only detect, not fully
+            // self-heal (matches the vecupdate pattern used by
+            // attempt_wedge_fusion and others for the same reason).
+            vector<int> vecupdate;
+            for (int k = 0; k < 2; k++)
+            {
+                int pvindex = g.vidtoindex[privateVids[k]];
+                for (vector<int>::iterator it = g.v[pvindex].vneigh.begin(); it != g.v[pvindex].vneigh.end(); ++it)
+                {
+                    vecupdate.push_back(*it);
+                }
+            }
+
+            g.delete_vertex(privateVids[0]);
+            g.delete_vertex(privateVids[1]);
+
+            g.update_index();
+            if (selfContained)
+            {
+                g.Nboundary--; // the pendant's own 3-edge boundary loop is gone with it
+            }
+            else
+            {
+                // Splice the loop back together around the now-deleted
+                // pendant before validating -- the loop itself survives,
+                // just 3 edges shorter, so Nboundary is unchanged.
+                g.set_prev_next_boundary(beforePendant, afterPendant);
+                // Clear any stale lateral-bond reference into the
+                // now-deleted pendant (see the comment above
+                // beforeChained/afterChained) -- otherwise it's left
+                // pointing at a deleted half-edge.
+                if (beforeChained)
+                {
+                    g.he[g.heidtoindex[beforePendant]].nextid = -1;
+                }
+                if (afterChained)
+                {
+                    g.he[g.heidtoindex[afterPendant]].previd = -1;
+                }
+            }
+            g.update_boundary();
+            g.update_neigh_vertex(c.sharedVid);
+            for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
+            {
+                if (*it != privateVids[0] && *it != privateVids[1])
+                {
+                    g.update_neigh_vertex(*it);
+                }
+            }
+            std::cout << "pendant trimer of dimers dissolved!" << endl;
+        }
+
+        return 1;
+    }
+
+    return -1;
+}
+
+int MC::fresh_boundary_index(System &g)
+{
+    // g.Nboundarylast is NOT a reliable "next unused boundary_index"
+    // counter across the whole codebase -- it's initialized to 0
+    // (System::initialize()) and only ever incremented by the handful of
+    // functions (attempt_add_trimer_dimer, and this file's own bridge
+    // moves) that explicitly maintain it. Ordinary growth via
+    // make_initial_triangle/attempt_add_monomer_dimer never touches it, so
+    // on an otherwise normal structure it can still read 0 even though
+    // boundary_index 0 is already the existing loop's index -- confirmed
+    // directly: attempt_add_monomer_bridge's split case handed out
+    // g.Nboundarylast as a "fresh" index that collided with the original
+    // loop's own index 0, corrupting the boundary chain. Scan for the
+    // actual maximum boundary_index in use instead of trusting the
+    // counter.
+    int maxBidx = -1;
+    for (int i = 0; i < g.Nhe; i++)
+    {
+        if (g.he[i].boundary_index > maxBidx)
+        {
+            maxBidx = g.he[i].boundary_index;
+        }
+    }
+    return maxBidx + 1;
+}
+
+int MC::attempt_add_monomer_bridge(System &g)
+{
+    // Reverse of attempt_remove_monomer_bridge. Attaches a brand-new vertex
+    // V to 2 EXISTING, distinct vertices A and B via 2 plain dimer edges --
+    // no closing edge, no face on either side of either new edge (unlike
+    // attempt_add_trimer_dimer, which always closes a full triangle). A and
+    // B are drawn from each other's vneigh (spatially close but not
+    // topologically bonded), matching the geometric precondition
+    // attempt_fusion uses for its own candidate search.
+    //
+    // Splicing V in requires "opening up" one existing boundary passage at
+    // A and one at B and cross-threading the 2 new edges through them --
+    // this is the exact reverse of attempt_remove_monomer_bridge's cross
+    // splice (see that function's header comment), verified by construction
+    // from the same real structure (test_mod_salt_disassemble.in) that
+    // motivated this move: reintroducing a bridge into the merged 12-edge
+    // loop that remove produced there needs precisely this cross-threading
+    // to reproduce the original 2 separate 8-edge loops.
+    if (g.Nv < 2)
+    {
+        return -1;
+    }
+
+    vector<int> eligible;
+    for (int vi = 0; vi < g.Nv; vi++)
+    {
+        if ((int)g.v[vi].hein.size() <= 5 && g.v[vi].heboundaryoutid != -1)
+        {
+            eligible.push_back(vi);
+        }
+    }
+    if (eligible.empty())
+    {
+        return -1;
+    }
+    int vindexA = eligible[gsl_rng_uniform_int(rg, eligible.size())];
+    int vidA = g.v[vindexA].vid;
+
+    if (g.v[vindexA].vneigh.size() == 0)
+    {
+        return -1;
+    }
+    vector<int> bcandidates;
+    for (vector<int>::iterator it = g.v[vindexA].vneigh.begin(); it != g.v[vindexA].vneigh.end(); ++it)
+    {
+        int vidBcand = *it;
+        int vindexBcand = g.vidtoindex[vidBcand];
+        if (vidBcand == vidA)
+        {
+            continue;
+        }
+        if ((int)g.v[vindexBcand].hein.size() > 5 || g.v[vindexBcand].heboundaryoutid == -1)
+        {
+            continue;
+        }
+        if (g.connected(vidA, vidBcand) > 0)
+        {
+            continue; // already directly bonded -- not a bridge candidate
+        }
+        bcandidates.push_back(vidBcand);
+    }
+    if (bcandidates.empty())
+    {
+        return -1;
+    }
+    int vidB = bcandidates[gsl_rng_uniform_int(rg, bcandidates.size())];
+    int vindexB = g.vidtoindex[vidB];
+
+    // The existing gap at A: Q1 is A's own outgoing boundary edge
+    // (Q1.vin==A), P1 is whatever currently precedes it. Likewise at B.
+    int Q1 = g.v[vindexA].heboundaryoutid;
+    int P1 = g.he[g.heidtoindex[Q1]].previd_boundary;
+    int Q2 = g.v[vindexB].heboundaryoutid;
+    int P2 = g.he[g.heidtoindex[Q2]].previd_boundary;
+    if (P1 == -1 || Q1 == -1 || P2 == -1 || Q2 == -1)
+    {
+        return -1;
+    }
+    // A and B sharing a gap (e.g. adjacent on the same tiny loop) would
+    // make P1==Q2 or P2==Q1 etc. after insertion nonsensical; reject rather
+    // than risk it -- genuinely rare given A,B are required to not already
+    // be connected.
+    if (P1 == Q2 || P2 == Q1 || Q1 == Q2 || P1 == P2)
+    {
+        return -1;
+    }
+    bool wereSameLoop = (g.he[g.heidtoindex[P1]].boundary_index == g.he[g.heidtoindex[P2]].boundary_index);
+
+    int etypeA = gsl_rng_uniform_int(rg, 4);
+    int etypeB = gsl_rng_uniform_int(rg, 4);
+
+    double Aco[3] = {g.v[vindexA].co[0], g.v[vindexA].co[1], g.v[vindexA].co[2]};
+    double Bco[3] = {g.v[vindexB].co[0], g.v[vindexB].co[1], g.v[vindexB].co[2]};
+    double Vco[3];
+    centvec(Aco, Bco, Vco); // midpoint -- see attempt_fusion's identical placement choice
+
+    if (g.check_overlap_centerv(Vco) < 0)
+    {
+        return -1;
+    }
+
+    g.add_vertex(Vco);
+    int vidV = g.v[g.Nv - 1].vid;
+
+    int enterA = g.Nhelast;
+    g.add_edge_type(vidA, vidV, etypeA); // front: A->V; opposite (leaveA: V->A) created too
+    int leaveA = g.he[g.heidtoindex[enterA]].opid;
+    int enterB = g.Nhelast;
+    g.add_edge_type(vidB, vidV, etypeB); // front: B->V; opposite (leaveB: V->B) created too
+    int leaveB = g.he[g.heidtoindex[enterB]].opid;
+
+    for (int i = 0; i < 4; i++)
+    {
+        g.update_half_edge(g.Nhelast - 4 + i);
+    }
+
+    // P1/Q1 (and separately P2/Q2) may already be laterally bonded to EACH
+    // OTHER -- P1.nextid==Q1, a real bending-energy relationship mirrored
+    // alongside P1.nextid_boundary==Q1 (see the note in
+    // attempt_remove_monomer_dimer). Splicing V in between breaks that
+    // adjacency (V now physically sits where the bond was), so its
+    // contribution must be included here, and the mirror itself cleared
+    // once the move is accepted (below) -- update_boundary() validates
+    // nextid_boundary==nextid whenever nextid!=-1, and this reproducibly
+    // crashed on a real stress run otherwise.
+    bool gap1WasBonded = (g.he[g.heidtoindex[P1]].nextid == Q1);
+    bool gap2WasBonded = (g.he[g.heidtoindex[P2]].nextid == Q2);
+    double gapBondEnergy = 0;
+    if (gap1WasBonded)
+    {
+        gapBondEnergy += g.dimer_bend_energy(g.heidtoindex[P1]);
+        gapBondEnergy += g.find_dg(g.he[g.heidtoindex[P1]].type, g.he[g.heidtoindex[Q1]].type, g.he[g.heidtoindex[Q1]].din);
+    }
+    if (gap2WasBonded)
+    {
+        gapBondEnergy += g.dimer_bend_energy(g.heidtoindex[P2]);
+        gapBondEnergy += g.find_dg(g.he[g.heidtoindex[P2]].type, g.he[g.heidtoindex[Q2]].type, g.he[g.heidtoindex[Q2]].din);
+    }
+
+    // Same incremental-accounting reasoning as attempt_add_trimer_dimer:
+    // these 2 new edges are isolated (their opposites are freshly created
+    // and fully unbound), so nothing else about the rest of the mesh
+    // depends on these specific new half-edge ids.
+    double de = g.stretch_energy(g.heidtoindex[enterA]) + g.dimer_bend_energy(g.heidtoindex[enterA]);
+    de += g.stretch_energy(g.heidtoindex[enterB]) + g.dimer_bend_energy(g.heidtoindex[enterB]);
+    de += gapBondEnergy; // lost when P1-Q1 / P2-Q2's own bond is broken by this insertion
+    double mu_sum = g.mu[etypeA] + g.mu[etypeB];
+    de -= mu_sum; // no other gbb term: the 2 new bonds don't bind to each other
+
+    double crit = exp(-de / g.T);
+
+    if (g.Test_assembly == 1)
+    {
+        crit = 1;
+    }
+
+    if (!(gsl_rng_uniform(rg) < crit))
+    {
+        // Rejected: undo. delete_edge needs an unbound half-edge; the
+        // opposites (leaveA/leaveB) qualify. Delete in descending id order.
+        int undoids[2] = {leaveA, leaveB};
+        if (undoids[0] < undoids[1])
+        {
+            int tmp = undoids[0];
+            undoids[0] = undoids[1];
+            undoids[1] = tmp;
+        }
+        g.delete_edge(undoids[0]);
+        g.delete_edge(undoids[1]);
+        g.delete_vertex(vidV);
+        g.update_index();
+        return -1;
+    }
+
+    // set_prev_next_boundary asserts the 2 edges it links already share one
+    // boundary_index, so relabel first using each gap's own still-intact
+    // ORIGINAL chain (nothing spliced yet), then splice. Two mutually
+    // exclusive cases, decided by wereSameLoop (captured above from the
+    // ORIGINAL P1/P2 indices, before any of this):
+    //  - Same original loop: this bridge PINCHES it into 2. The original
+    //    loop is P1->Q1->[chainA]->P2->Q2->[chainB]->P1. Walking forward
+    //    from Q2 (its own original nextid_boundary chain) reaches P1
+    //    directly via chainB, without passing P2/Q1 -- that whole stretch
+    //    becomes 1 resulting loop together with P1/enterA/leaveB, and
+    //    stays at bi (P1's own index, already correct). Walking forward
+    //    from Q1 reaches P2 directly via chainA -- that stretch becomes
+    //    the OTHER resulting loop together with P2/enterB/leaveA, and
+    //    needs a fresh index (P2 currently still carries bi too, since it
+    //    was the same loop).
+    //  - Different original loops: this bridge MERGES them. Walking
+    //    forward from Q2 reaches P2 (closing loop Y on its own, since nothing
+    //    of loop X lies on this stretch) -- relabel that whole stretch to
+    //    bi so it joins gap1's (loop X's) index, matching P1.
+    int bi = g.he[g.heidtoindex[P1]].boundary_index;
+    g.he[g.heidtoindex[enterA]].boundary_index = bi;
+    g.he[g.heidtoindex[leaveB]].boundary_index = bi;
+
+    if (wereSameLoop)
+    {
+        int freshBidx = fresh_boundary_index(g);
+        int wi = g.heidtoindex[Q2];
+        for (int step = 0; step <= g.Nhe; step++)
+        {
+            g.he[wi].boundary_index = bi;
+            if (g.he[wi].id == P1)
+            {
+                break;
+            }
+            wi = g.heidtoindex[g.he[wi].nextid_boundary];
+        }
+        wi = g.heidtoindex[Q1];
+        for (int step = 0; step <= g.Nhe; step++)
+        {
+            g.he[wi].boundary_index = freshBidx;
+            if (g.he[wi].id == P2)
+            {
+                break;
+            }
+            wi = g.heidtoindex[g.he[wi].nextid_boundary];
+        }
+        g.he[g.heidtoindex[enterB]].boundary_index = freshBidx;
+        g.he[g.heidtoindex[leaveA]].boundary_index = freshBidx;
+        g.Nboundary++;
+    }
+    else
+    {
+        int wi = g.heidtoindex[Q2];
+        for (int step = 0; step <= g.Nhe; step++)
+        {
+            g.he[wi].boundary_index = bi;
+            if (g.he[wi].id == P2)
+            {
+                break;
+            }
+            wi = g.heidtoindex[g.he[wi].nextid_boundary];
+        }
+        g.he[g.heidtoindex[enterB]].boundary_index = bi;
+        g.he[g.heidtoindex[leaveA]].boundary_index = bi;
+        g.Nboundary--;
+    }
+
+    // Clear the P1-Q1 / P2-Q2 lateral-bond mirrors detected above (gapBondEnergy)
+    // now that the move is accepted -- V physically sits between them now.
+    if (gap1WasBonded)
+    {
+        g.he[g.heidtoindex[P1]].nextid = -1;
+    }
+    if (g.he[g.heidtoindex[Q1]].previd == P1)
+    {
+        g.he[g.heidtoindex[Q1]].previd = -1;
+    }
+    if (gap2WasBonded)
+    {
+        g.he[g.heidtoindex[P2]].nextid = -1;
+    }
+    if (g.he[g.heidtoindex[Q2]].previd == P2)
+    {
+        g.he[g.heidtoindex[Q2]].previd = -1;
+    }
+
+    // Now every edge involved has a consistent index -- safe to splice.
+    g.set_prev_next_boundary(P1, enterA);
+    g.set_prev_next_boundary(enterA, leaveB);
+    g.set_prev_next_boundary(leaveB, Q2);
+    g.set_prev_next_boundary(P2, enterB);
+    g.set_prev_next_boundary(enterB, leaveA);
+    g.set_prev_next_boundary(leaveA, Q1);
+
+    g.update_index();
+    g.update_boundary();
+    g.update_neigh_vertex(vidA);
+    g.update_neigh_vertex(vidB);
+    g.update_neigh_vertex(vidV);
+
+    std::cout << "bridge monomer attached!" << endl;
+    return 1;
+}
+
+int MC::attempt_remove_monomer_bridge(System &g)
+{
+    // Reverse of attempt_add_monomer_bridge. Looks for a degree-2 vertex
+    // whose 2 bonds are BOTH fully free-standing on BOTH sides (is_boundary
+    // true for the bond itself AND its opposite) -- unlike every other
+    // removal move in this file, which requires at least one adjacent
+    // triangular face to anchor its energy/placement calculations on. A
+    // bridge like this arises simply from ordinary disassembly: whatever
+    // faces used to be adjacent to these 2 bonds were already stripped away
+    // by earlier monomer/dimer/trimer removals, leaving a vertex connected
+    // to the rest of the structure by 2 plain bonds and nothing else.
+    //
+    // Both of the vertex's bonds being fully free-standing on both sides
+    // means the vertex is necessarily doubleboundary (it has 2 separate
+    // enter/leave passages, not 1) -- confirmed on a real stuck structure
+    // (test_mod_salt_disassemble.in) where the boundary chain visited it
+    // via 2 independent passages. Removing it therefore needs a CROSS
+    // splice -- passage 1's "before" edge reconnects to passage 2's
+    // "after" edge, and vice versa -- not a same-passage splice (verified
+    // directly: same-passage reconnection fails the vout==vin continuity
+    // set_prev_next_boundary requires, cross reconnection satisfies it).
+    // Which specific pairing is the valid one is determined at runtime
+    // below rather than assumed, since it depends on which of the 2
+    // passages is "passage 1" vs "passage 2" for this particular vertex.
+    struct Candidate
+    {
+        int vid;
+        int enter1, enter2; // the vertex's 2 hein edges
+    };
+    vector<Candidate> candidates;
+
+    for (int vi = 0; vi < g.Nv; vi++)
+    {
+        if (g.v[vi].hein.size() != 2)
+        {
+            continue;
+        }
+        int e1 = g.v[vi].hein[0];
+        int e2 = g.v[vi].hein[1];
+        int e1idx = g.heidtoindex[e1];
+        int e2idx = g.heidtoindex[e2];
+        // "No face on either side of either bond": is_boundary requires
+        // only ONE of nextid/previd to be -1, which is all that's needed
+        // here. It does NOT require the other of the pair to be -1 too --
+        // that field commonly carries a real lateral bending-energy
+        // relationship to a neighboring boundary edge (see the note in
+        // attempt_remove_monomer_dimer), which is not the same thing as a
+        // face and doesn't disqualify this candidate; it's handled by
+        // vertex_energy(vid0) below and the reference-clearing after
+        // deletion.
+        if (!(g.is_boundary(e1) > 0 && g.is_boundary(g.he[e1idx].opid) > 0))
+        {
+            continue;
+        }
+        if (!(g.is_boundary(e2) > 0 && g.is_boundary(g.he[e2idx].opid) > 0))
+        {
+            continue;
+        }
+        Candidate c;
+        c.vid = g.v[vi].vid;
+        c.enter1 = e1;
+        c.enter2 = e2;
+        candidates.push_back(c);
+    }
+
+    if (candidates.empty())
+    {
+        return -1;
+    }
+    Candidate c = candidates[gsl_rng_uniform_int(rg, candidates.size())];
+
+    int vid0 = c.vid;
+    int e1idx = g.heidtoindex[c.enter1];
+    int e2idx = g.heidtoindex[c.enter2];
+    int etype1 = g.he[e1idx].type;
+    int etype2 = g.he[e2idx].type;
+
+    // vertex_energy(vid0) sums the stretch energy of these 2 edges, plus
+    // (via its own is_boundary(opid)>0 branch) the dimer_bend_energy of
+    // whichever of enter1/enter2's opposites carry a real lateral bond to
+    // an external edge -- exactly the energy that disappears when this
+    // vertex and its 2 bonds are removed. Nothing else in the mesh depends
+    // on these 2 specific half-edge ids.
+    double de = -g.vertex_energy(vid0);
+    double mu_sum = g.mu[etype1] + g.mu[etype2];
+    de += mu_sum; // no gbb term: the 2 bonds don't bind to each other
+
+    double crit = exp(-de / g.T);
+
+    if (g.Test_assembly == 1)
+    {
+        crit = 1;
+    }
+
+    if (!(gsl_rng_uniform(rg) < crit))
+    {
+        return -1;
+    }
+
+    // Any of this vertex's 4 half-edges (enter1, enter2, and their
+    // opposites) may itself carry a real lateral bending-energy
+    // relationship to an EXTERNAL edge via the plain nextid/previd fields
+    // (already included in vertex_energy(vid0) above -- see the note in
+    // attempt_remove_monomer_dimer). Capture them now, before deletion,
+    // so the external partner's own stale reference back here can be
+    // cleared afterward (same pattern as attempt_remove_monomer_dimer's
+    // heid0_selfnext/heid0_selfprev).
+    int op1 = g.he[e1idx].opid;
+    int op2 = g.he[e2idx].opid;
+    int watchIds[4] = {c.enter1, c.enter2, op1, op2};
+    int selfNext[4], selfPrev[4];
+    for (int k = 0; k < 4; k++)
+    {
+        int idxk = g.heidtoindex[watchIds[k]];
+        selfNext[k] = g.he[idxk].nextid;
+        selfPrev[k] = g.he[idxk].previd;
+    }
+
+    // Work out each bond's splice target before deleting anything (heidtoindex
+    // goes stale for survivors after delete_edge's erase() calls, same
+    // reason attempt_remove_trimer_dimer's splice prep runs before its own
+    // deletes).
+    int leave1 = g.he[e1idx].nextid_boundary;
+    int leave2 = g.he[e2idx].nextid_boundary;
+    int before1 = g.he[e1idx].previd_boundary;
+    int after1 = g.he[g.heidtoindex[leave1]].nextid_boundary;
+    int before2 = g.he[e2idx].previd_boundary;
+    int after2 = g.he[g.heidtoindex[leave2]].nextid_boundary;
+
+    // Degenerate case: before/after pointing back into the 4 edges being
+    // deleted (enter1/enter2/leave1/leave2) means this "bridge" is actually
+    // the entire remaining boundary -- e.g. Nv==3, nothing left to splice
+    // onto. Out of scope for this move; reject rather than risk a bad splice.
+    int deleted[4] = {c.enter1, c.enter2, leave1, leave2};
+    for (int k = 0; k < 4; k++)
+    {
+        if (before1 == deleted[k] || after1 == deleted[k] || before2 == deleted[k] || after2 == deleted[k])
+        {
+            return -1;
+        }
+    }
+
+    // Determine the valid (cross, per the header comment) pairing from the
+    // actual vout/vin values -- don't assume which passage is which.
+    int before1vout = g.he[g.heidtoindex[before1]].vout;
+    int before2vout = g.he[g.heidtoindex[before2]].vout;
+    int after1vin = g.he[g.heidtoindex[after1]].vin;
+    int after2vin = g.he[g.heidtoindex[after2]].vin;
+    int spliceA_before, spliceA_after, spliceB_before, spliceB_after;
+    if (before1vout == after2vin && before2vout == after1vin)
+    {
+        spliceA_before = before1; spliceA_after = after2;
+        spliceB_before = before2; spliceB_after = after1;
+    }
+    else if (before1vout == after1vin && before2vout == after2vin)
+    {
+        spliceA_before = before1; spliceA_after = after1;
+        spliceB_before = before2; spliceB_after = after2;
+    }
+    else
+    {
+        // Shouldn't happen for a genuine bridge candidate, but bail out
+        // safely rather than risk splicing edges that don't actually meet.
+        return -1;
+    }
+    int bidxBefore1 = g.he[g.heidtoindex[before1]].boundary_index;
+    int bidxBefore2 = g.he[g.heidtoindex[before2]].boundary_index;
+    bool wereSameLoop = (bidxBefore1 == bidxBefore2);
+
+    vector<int> vecupdate;
+    int vindex0 = g.vidtoindex[vid0];
+    for (vector<int>::iterator it = g.v[vindex0].vneigh.begin(); it != g.v[vindex0].vneigh.end(); ++it)
+    {
+        vecupdate.push_back(*it);
+    }
+
+    // delete_edge requires an already-unbound half-edge; enter1/enter2 (and
+    // their opposites) are all fully unbound here, so either id of each
+    // pair works. Delete in descending id order (see attempt_add_trimer_dimer's
+    // undo path) so heidtoindex/vidtoindex stay valid for entries not yet
+    // processed.
+    int hids[2] = {c.enter1, c.enter2};
+    if (hids[0] < hids[1])
+    {
+        int tmp = hids[0];
+        hids[0] = hids[1];
+        hids[1] = tmp;
+    }
+    g.delete_edge(hids[0]);
+    g.delete_edge(hids[1]);
+    g.delete_vertex(vid0);
+
+    g.update_index();
+
+    // All 4 watched half-edges are gone now; clear any external partner's
+    // stale reference back to them (see the capture above).
+    for (int k = 0; k < 4; k++)
+    {
+        if (selfNext[k] != -1)
+        {
+            g.he[g.heidtoindex[selfNext[k]]].previd = -1;
+        }
+        if (selfPrev[k] != -1)
+        {
+            g.he[g.heidtoindex[selfPrev[k]]].nextid = -1;
+        }
+    }
+
+    // set_prev_next_boundary asserts the 2 edges it links already share one
+    // boundary_index -- which spliceA_before/spliceA_after (and spliceB's
+    // pair) generally do NOT yet, if this vertex's 2 bonds were on 2
+    // originally-distinct loops. So relabel first, splice second.
+    //
+    // spliceA_after..spliceB_before is exactly the remnant of "passage 2"'s
+    // original loop (bidxBefore2) that survives the deletion -- walkable
+    // right now via its own still-intact nextid_boundary chain (nothing
+    // deleted lies on this stretch; we stop deliberately at spliceB_before
+    // rather than continuing onto its own nextid_boundary, which still
+    // dangles toward a now-deleted edge). Likewise spliceB_after..spliceA_before
+    // is passage 1's surviving remnant (bidxBefore1).
+    if (wereSameLoop)
+    {
+        // The 2 passages were already the same loop (a doubleboundary
+        // vertex visited twice within it) -- removing the bridge pinches
+        // it into 2 separate loops. Passage 1's remnant keeps bidxBefore1;
+        // give passage 2's remnant a fresh index.
+        int freshBidx = fresh_boundary_index(g);
+        int wi = g.heidtoindex[spliceA_after];
+        for (int step = 0; step <= g.Nhe; step++)
+        {
+            g.he[wi].boundary_index = freshBidx;
+            if (g.he[wi].id == spliceB_before)
+            {
+                break;
+            }
+            wi = g.heidtoindex[g.he[wi].nextid_boundary];
+        }
+        g.Nboundary++;
+    }
+    else
+    {
+        // 2 distinct loops are being joined into 1 -- relabel passage 2's
+        // remnant (currently bidxBefore2) to match passage 1's (bidxBefore1).
+        int wi = g.heidtoindex[spliceA_after];
+        for (int step = 0; step <= g.Nhe; step++)
+        {
+            g.he[wi].boundary_index = bidxBefore1;
+            if (g.he[wi].id == spliceB_before)
+            {
+                break;
+            }
+            wi = g.heidtoindex[g.he[wi].nextid_boundary];
+        }
+        g.Nboundary--;
+    }
+
+    g.set_prev_next_boundary(spliceA_before, spliceA_after);
+    g.set_prev_next_boundary(spliceB_before, spliceB_after);
+    g.update_boundary();
+
+    for (vector<int>::iterator it = vecupdate.begin(); it != vecupdate.end(); ++it)
+    {
+        if (*it != vid0)
+        {
+            g.update_neigh_vertex(*it);
+        }
+    }
+
+    std::cout << "bridge monomer removed!" << endl;
+    return 1;
+}
+
 void MC::get_dimer_etypes(int etypeheid0, int etypenew1, int etypenew2)
 {
 
