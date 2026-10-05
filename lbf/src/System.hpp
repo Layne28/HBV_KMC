@@ -117,6 +117,7 @@ public:
 	double *mu;
 	double dmu;
 	double dG_apoholo; // conformational free energy difference G_holo - G_apo, controls apo/holo equilibrium for every edge
+	double dG_apoholo_sol; // G_holo - G_apo for dimers in solution (defaults to dG_apoholo); sets the solution apo/holo balance that mu refers to
 	double mudrug;
 	double ks0;
 	double kd0;
@@ -268,6 +269,8 @@ public:
 	void update_fusion_pairs_he();
 	void save_vtx(int vid0, VTX *tempvtx);
 	void check_odd_neigh();
+	int count_holo_he(); // number of halfedges in the holo state (apo = Nhe - this)
+	void compute_stretch_energy_apo_holo(double &eapo, double &eholo); // bond strain energy from apo / holo edges
 	void set_prev_next_boundary(int previd0, int nextid0);
 
 	int get_angle_type(int etype, int nexttype);

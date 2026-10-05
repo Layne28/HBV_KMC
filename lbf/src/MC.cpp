@@ -5,6 +5,13 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
 
     if(theParams.is_key("ks0")) ks0 = std::stod(theParams.get_value("ks0"));
     if(theParams.is_key("kd0")) kd0 = std::stod(theParams.get_value("kd0"));
+    if(theParams.is_key("kl0")) kl0 = std::stod(theParams.get_value("kl0"));
+    if (kl0 < 0)
+    {
+        std::cout << "ERROR: kl0 must be >= 0, got " << kl0 << std::endl;
+        exit(-1);
+    }
+    std::cout << "kl0 (apo/holo switch attempts per edge per sweep): " << kl0 << std::endl;
     if(theParams.is_key("do_vertex_only")) do_vertex_only = std::stod(theParams.get_value("do_vertex_only"));
     if(theParams.is_key("debug_sheet")) debug_sheet = std::stoi(theParams.get_value("debug_sheet"));
     if(theParams.is_key("debug_dimer_drug_removal")) debug_dimer_drug_removal = std::stoi(theParams.get_value("debug_dimer_drug_removal"));
@@ -12,6 +19,7 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
     if(theParams.is_key("allow_trimer_moves")) allow_trimer_moves = std::stoi(theParams.get_value("allow_trimer_moves"));
     if(theParams.is_key("allow_bridge_moves")) allow_bridge_moves = std::stoi(theParams.get_value("allow_bridge_moves"));
     if(theParams.is_key("allow_bridge_add_moves")) allow_bridge_add_moves = std::stoi(theParams.get_value("allow_bridge_add_moves"));
+    if(theParams.is_key("allow_interior_moves")) allow_interior_moves = std::stoi(theParams.get_value("allow_interior_moves"));
 
     //***Set RNG***
     rg = the_rg;
@@ -349,14 +357,38 @@ void MC::sweep(System &g)
         }
     }
 
-    /*** Apo/holo conformational switch (same attempt frequency as the quasi-equivalent type switch above) ***/
-    for (int nc = 0; nc < g.Nhe/2; nc++)
+    /*** Apo/holo conformational switch: on average kl0 attempts per edge per sweep.
+     * The fractional part of kl0*Nedges is attempted with the matching probability. ***/
+    double nswitch = kl0 * (g.Nhe / 2);
+    int nswitch_attempts = (int)nswitch;
+    if (gsl_rng_uniform(rg) < nswitch - nswitch_attempts)
+        nswitch_attempts++;
+    for (int nc = 0; nc < nswitch_attempts; nc++)
     {
         int ind1 = gsl_rng_uniform_int(rg, g.Nhe);
         int e1 = g.he[ind1].id;
         int x = attempt_switch_apo_holo(g, e1);
         if (x >= 0)
             apoholochanged++;
+    }
+
+    /*** Remove/insert a dimer between two complete faces (works on a closed
+     * shell). One direction per sweep, each with probability 1/2, so the pair
+     * forms a single reversible move (see attempt_remove_interior_dimer). ***/
+    if (allow_interior_moves && g.Nhe > 6)
+    {
+        g.update_boundary();
+        if (gsl_rng_uniform(rg) < 0.5)
+        {
+            if (attempt_remove_interior_dimer(g) > 0)
+                interiorremoved++;
+        }
+        else
+        {
+            if (attempt_add_interior_dimer(g) > 0)
+                interioradded++;
+        }
+        g.update_boundary();
     }
 
     /*** Add monomers/dimers ***/
@@ -1101,7 +1133,11 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
                 g.update_normals_vertex(g.vidtoindex[voutid]);
                 g.update_excluder_top_vertex(g.vidtoindex[voutid]);
 
+                // apo/holo state of the new edge (before its stretch energy is evaluated)
+                double conf_factor = 1;
+                double dg_conf = propose_new_edge_states(g, {g.Nhelast - 2}, conf_factor);
                 double de = g.stretch_energy(g.heidtoindex[g.Nhelast - 2]);
+                de += dg_conf;
 
                 de += g.dimer_bend_energy(g.heidtoindex[g.Nhelast - 2]) + g.dimer_bend_energy(xidindex);
                 de += g.bend_energy(heindex0) + g.bend_energy(xidindex)-e1; // g.dimer_bend_energy(heindex0);
@@ -1140,7 +1176,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
 
                 //double crit = 2.*g.z*g.K*g.K*g.K*exp((-de)/g.T);
 
-                double crit = exp((-de) / g.T) / 2;
+                double crit = exp((-de) / g.T) / 2 * conf_factor;
                 int overlapflag = -1;
 
                 /* check overlap */
@@ -1344,7 +1380,11 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
 
 
 
+                // apo/holo state of the new edge (before its stretch energy is evaluated)
+                double conf_factor = 1;
+                double dg_conf = propose_new_edge_states(g, {g.Nhelast - 2}, conf_factor);
                 double de = g.stretch_energy(g.heidtoindex[g.Nhelast - 2]);
+                de += dg_conf;
                 de += g.dimer_bend_energy(g.heidtoindex[g.Nhelast - 2]) + g.dimer_bend_energy(heindex0);
                 de += g.bend_energy(heindex0) + g.bend_energy(xidindex)-e1;
 
@@ -1378,7 +1418,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
                         }
                     }*/
 
-                double crit = exp((-de) / g.T) / 2;
+                double crit = exp((-de) / g.T) / 2 * conf_factor;
                 int overlapflag = -1;
 
                 /* check overlap */
@@ -1617,6 +1657,9 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
         int index2 = g.heidtoindex[g.Nhelast - 2];
         int index4 = g.heidtoindex[g.Nhelast - 4];
         double de = 0;
+        // apo/holo states of the 2 new edges (before their stretch energy is evaluated)
+        double conf_factor = 1;
+        double dg_conf = propose_new_edge_states(g, {g.Nhelast - 4, g.Nhelast - 2}, conf_factor);
         if(debug_sheet==1){
             std::cout << "Total elastic energy: " << g.stretch_energy(index2) + g.dimer_bend_energy(index2) + g.stretch_energy(index4) + g.dimer_bend_energy(index4) + g.bend_energy(heindex0) + g.dimer_bend_energy(heindex0)<< std::endl;
         }
@@ -1650,6 +1693,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
         double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
 
         de += gbb - (g.mu[etypenew1] + g.mu[etypenew2]);
+        de += dg_conf;
         if(debug_sheet==1){
             std::cout << "Total Binding free energy: " << gbb << ", total chemical potential: " << g.mu[etypenew1] + g.mu[etypenew2] << ", total: " << de << std::endl;
             if(de<0){
@@ -1668,6 +1712,7 @@ int MC::attempt_add_monomer_dimer(System &g, int heid0) //!!! Should update with
         else{
             crit = 2 * vp * exp(-de / g.T);
         }
+        crit *= conf_factor;
         //std::cout << " crit is " << crit << endl;
         int overlapflag = -1;
         //g.update_index();
@@ -1928,6 +1973,9 @@ int MC::attempt_add_monomer_dimer_drug(System &g, int heid0) //!!! Should update
         int index2 = g.heidtoindex[g.Nhelast - 2];
         int index4 = g.heidtoindex[g.Nhelast - 4];
         double de = 0;
+        // apo/holo states of the 2 new edges (before their stretch energy is evaluated)
+        double conf_factor = 1;
+        double dg_conf = propose_new_edge_states(g, {g.Nhelast - 4, g.Nhelast - 2}, conf_factor);
         if(debug_sheet!=1){
             de = g.stretch_energy(index2) + g.dimer_bend_energy(index2);
             de += g.stretch_energy(index4) + g.dimer_bend_energy(index4);
@@ -1958,8 +2006,9 @@ int MC::attempt_add_monomer_dimer_drug(System &g, int heid0) //!!! Should update
         double vp = pow((sqrt(2*M_PI)*g.gaussian_sigma),3)/( exp(-((dis_new*dis_new)/(2*g.gaussian_sigma*g.gaussian_sigma))) );
 
         de += gbb - (g.mu[etypenew1] + g.mu[etypenew2]);
+        de += dg_conf;
         delete[] dis_vector;    
-        double crit = 2 * vp * exp(-de / g.T);
+        double crit = 2 * vp * exp(-de / g.T) * conf_factor;
         //std::cout << " crit is " << crit << endl;
         int overlapflag = -1;
         //g.update_index();
@@ -2205,6 +2254,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
         gbb += g.find_dg(optype, opnexttype, g.he[nextopindex0].din);
 
         de -= (gbb - g.mu[g.he[heindex0].type]);
+        de -= conf_free_energy(g, {heid0});
         double crit = 2 * exp(-de / g.T); ///(2.0*g.z*g.K*g.K*g.K);
         if(debug_dimer_drug_removal==1){
             crit = 1.0;
@@ -2388,6 +2438,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 std::cout << "g.compute_energy() -e11 "<< g.compute_energy()-e11 <<endl; std::exit(-1);} */
 
             de -= (gbb - (g.mu[g.he[heindex0].type] + g.mu[g.he[heindex_prev_boundary].type]));
+            de -= conf_free_energy(g, {heid0, heid_prev_boundary});
             //
             //**************************
             // gaussian correction
@@ -2542,6 +2593,7 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             de -= (g.dimer_bend_energy(g.heidtoindex[nextopid0]) + g.dimer_bend_energy(g.heidtoindex[prevopid0]));
 
             de -= (gbb - (g.mu[g.he[heindex0].type] + g.mu[g.he[heindex_next_boundary].type]));
+            de -= conf_free_energy(g, {heid0, heid_next_boundary});
 
             //**************************
             // gaussian correction
@@ -2858,6 +2910,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 std::cout << "g.compute_energy() -e11 "<< g.compute_energy()-e11 <<endl; std::exit(-1);} */
 
             de -= (gbb - (g.mu[g.he[heindex0].type] + g.mu[g.he[heindex_prev_boundary].type]));
+            de -= conf_free_energy(g, {heid0, heid_prev_boundary});
             //
             //**************************
             // gaussian correction
@@ -3018,6 +3071,7 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             de -= (g.dimer_bend_energy(g.heidtoindex[nextopid0]) + g.dimer_bend_energy(g.heidtoindex[prevopid0]));
 
             de -= (gbb - (g.mu[g.he[heindex0].type] + g.mu[g.he[heindex_next_boundary].type]));
+            de -= conf_free_energy(g, {heid0, heid_next_boundary});
 
             //**************************
             // gaussian correction
@@ -4440,12 +4494,12 @@ int MC::attempt_change_edge_type(System &g, int heid0)
 
 /* Attempt to switch the apo/holo conformational state of an edge (both
  * halfedges of the pair, which always carry the same state). This is
- * independent of the AB/CD quasi-equivalent type (g.he[].type): it only
- * changes which equilibrium bond length (g.l0 vs g.l0h) subsequent stretch
- * energy evaluations will use for this edge. As with attempt_change_edge_type,
- * the type-dependent binding/bend energies are unaffected by this move (type
- * doesn't change), so the Metropolis criterion only involves the conformational
- * free energy difference g.dG_apoholo, mirroring how g.mu/g.dmu bias the AB/CD switch. */
+ * independent of the AB/CD quasi-equivalent type (g.he[].type), so the
+ * type-dependent binding/bend energies are unaffected. It does change the
+ * equilibrium bond length (g.l0 vs g.l0h), so the Metropolis criterion includes
+ * the resulting change in stretch (strain) energy of the edge, plus the
+ * conformational free energy difference g.dG_apoholo. Stretch energy is
+ * counted as in System::compute_energy (half from each halfedge). */
 int MC::attempt_switch_apo_holo(System &g, int heid0)
 {
     int heindex0 = g.heidtoindex[heid0];
@@ -4457,18 +4511,79 @@ int MC::attempt_switch_apo_holo(System &g, int heid0)
     double mu_old = oldholo ? -g.dG_apoholo : 0.0;
     double mu_new = newholo ? -g.dG_apoholo : 0.0;
 
-    double de = -mu_new - (-mu_old);
+    double estretch_old = 0.5 * (g.stretch_energy(heindex0) + g.stretch_energy(heopindex0));
+    g.he[heindex0].holo = newholo;
+    g.he[heopindex0].holo = newholo;
+    double estretch_new = 0.5 * (g.stretch_energy(heindex0) + g.stretch_energy(heopindex0));
+
+    double de = (estretch_new - estretch_old) - mu_new - (-mu_old);
     double crit = exp(-de / g.T);
     if (gsl_rng_uniform(rg) < crit)
     {
-        g.he[heindex0].holo = newholo;
-        g.he[heopindex0].holo = newholo;
         return (int)newholo;
     }
     else
     {
+        g.he[heindex0].holo = oldholo;
+        g.he[heopindex0].holo = oldholo;
         return -1;
     }
+}
+
+/* g.mu is the chemical potential of all solution dimers, with apo and holo in
+ * equilibrium (G_holo - G_apo = dG_apoholo_sol). Bound-state energies are
+ * measured relative to apo, so the reservoir chemical potential of a dimer in a
+ * given conformation, on that same scale, is mu - T ln(1 + exp(-dG_apoholo_sol/T)).
+ * This returns the per-dimer correction T ln(1 + exp(-dG_apoholo_sol/T)) >= 0,
+ * added to de for every dimer taken from solution (and subtracted on removal). */
+double MC::solution_conf_free_energy(System &g)
+{
+    double x = -g.dG_apoholo_sol / g.T;
+    return g.T * (std::max(x, 0.0) + log1p(exp(-fabs(x)))); // overflow-safe T ln(1 + e^x)
+}
+
+/* Apo/holo state of dimers added by the add moves. Each new edge (given by one
+ * of its halfedge ids; the opposite is set too) is proposed apo or holo with
+ * probability 1/2. Call this after the edges exist but before their stretch
+ * energy is evaluated. Returns the conformational free energy of the new edges
+ * relative to the solution reservoir (see conf_free_energy), which must be added
+ * to the move's de, and sets proposal_factor = 2^n, which must multiply the
+ * acceptance criterion to cancel the 1/2 selection probability (the reverse
+ * removal move is deterministic in the state). */
+double MC::propose_new_edge_states(System &g, const std::vector<int> &heids, double &proposal_factor)
+{
+    double dg_conf = 0;
+    proposal_factor = 1;
+    double dg_sol = solution_conf_free_energy(g);
+    for (int heid : heids)
+    {
+        dg_conf += dg_sol;
+        int heindex = g.heidtoindex[heid];
+        bool holo = (gsl_rng_uniform(rg) < 0.5);
+        g.he[heindex].holo = holo;
+        g.he[g.heidtoindex[g.he[heindex].opid]].holo = holo;
+        if (holo)
+            dg_conf += g.dG_apoholo;
+        proposal_factor *= 2;
+    }
+    return dg_conf;
+}
+
+/* Conformational free energy of the given edges (one halfedge id per edge),
+ * relative to the solution reservoir: dG_apoholo per holo edge plus the
+ * solution-phase term per edge. Removal moves subtract this from de; it is the
+ * same quantity propose_new_edge_states adds for the reverse addition. */
+double MC::conf_free_energy(System &g, const std::vector<int> &heids)
+{
+    double dg_conf = 0;
+    double dg_sol = solution_conf_free_energy(g);
+    for (int heid : heids)
+    {
+        dg_conf += dg_sol;
+        if (g.he[g.heidtoindex[heid]].holo)
+            dg_conf += g.dG_apoholo;
+    }
+    return dg_conf;
 }
 
 /***** This function : ***********************/
@@ -5788,6 +5903,299 @@ int MC::attempt_unbind_triangle(System &g, int heid0)
     return (-1);
 }
 
+/***** Interior dimer removal / insertion ******************************/
+/* A pair of mutually reverse moves that let a dimer leave or enter the
+ * interior of a shell, so that a closed (or locally closed) shell can lose a
+ * dimer directly -- the boundary removal moves cannot act on a closed shell,
+ * and attempt_unbind_triangle releases no stretch (strain) energy.
+ *
+ * Closed state: edge e = a->b shared by the complete faces (e, n1, p1) and
+ * (op, n2, p2), with c = n1.vout and d = n2.vout.
+ * Open state: e removed, leaving an isolated 4-edge boundary loop
+ * n1 (b->c), p1 (c->a), n2 (a->d), p2 (d->b) with the wedge bonds n1->p1 and
+ * n2->p2 kept, and the corners at a and b unbonded.
+ *
+ * Proposals: removal picks a halfedge uniformly from all Nhe (either half of
+ * e: 2/Nhe); insertion picks a boundary halfedge uniformly (any of the 4 loop
+ * edges: 4/Nsurf), a type for a->b uniformly (1/4) and an apo/holo state
+ * (1/2, via propose_new_edge_states). Each sweep attempts one of the two
+ * directions with probability 1/2.
+ *
+ * Target ratio pi_closed/pi_open = K exp(-dF/T), with dF the change in
+ * elastic energy, contact free energy, -mu and the apo/holo terms, and
+ * K = 1/4 the same per-dimer constant as the existing monomer add/remove pair
+ * (2 boundary edges propose a given monomer addition, each with type
+ * probability 1/4, and its acceptance carries a factor 1/2; the removal is
+ * proposed by 1 boundary edge). This keeps the effective chemical potential
+ * of a dimer added between existing vertices the same in both pathways.
+ *
+ * Both directions require interior_dimer_closed_ok on the closed state, so
+ * the set of allowed transitions is symmetric. */
+
+/* Per-halfedge elastic energy terms exactly as in System::compute_energy,
+ * summed over the given halfedge ids (ids no longer present are skipped). */
+double MC::local_elastic_energy(System &g, const std::vector<int> &heids)
+{
+    double e = 0;
+    for (int heid : heids)
+    {
+        int heindex = g.heidtoindex[heid];
+        if (heindex < 0)
+            continue;
+        e += 0.5 * g.stretch_energy(heindex) + 0.5 * g.bend_energy(heindex) + g.dimer_bend_energy(heindex);
+    }
+    return e;
+}
+
+/* Closed-state eligibility of edge heid0 (symmetric in heid0 / its opposite). */
+bool MC::interior_dimer_closed_ok(System &g, int heid0)
+{
+    int eindex = g.heidtoindex[heid0];
+    int opid = g.he[eindex].opid;
+    int opindex = g.heidtoindex[opid];
+    int n1 = g.he[eindex].nextid, p1 = g.he[eindex].previd;
+    int n2 = g.he[opindex].nextid, p2 = g.he[opindex].previd;
+    if (n1 == -1 || p1 == -1 || n2 == -1 || p2 == -1)
+        return false; // both faces must be complete
+    int n1index = g.heidtoindex[n1], p1index = g.heidtoindex[p1];
+    int n2index = g.heidtoindex[n2], p2index = g.heidtoindex[p2];
+    if (g.he[n1index].nextid != p1 || g.he[p1index].nextid != heid0 || g.he[n2index].nextid != p2 || g.he[p2index].nextid != opid)
+        return false;
+
+    int a = g.he[eindex].vin, b = g.he[eindex].vout;
+    int c = g.he[n1index].vout, d = g.he[n2index].vout;
+    if (c == d || c == a || c == b || d == a || d == b)
+        return false;
+    // the hole must not touch any other boundary loop (no loop merging)
+    if (g.is_vboundary(a) > 0 || g.is_vboundary(b) > 0 || g.is_vboundary(c) > 0 || g.is_vboundary(d) > 0)
+        return false;
+    // no drug bound at any of the 4 contacts made/broken
+    if (g.he[eindex].din != 0 || g.he[opindex].din != 0 || g.he[n1index].din != 0 || g.he[n2index].din != 0)
+        return false;
+    // coordination limit used by the other addition moves (at most 6 after adding)
+    if (g.v[g.vidtoindex[a]].hein.size() > 6 || g.v[g.vidtoindex[b]].hein.size() > 6)
+        return false;
+    if (g.check_overlap_g(a) < 0 || g.check_overlap_g(b) < 0)
+        return false;
+    return true;
+}
+
+int MC::attempt_remove_interior_dimer(System &g)
+{
+    int heid0 = g.he[gsl_rng_uniform_int(rg, g.Nhe)].id;
+    if (!interior_dimer_closed_ok(g, heid0))
+        return -1;
+
+    int eindex = g.heidtoindex[heid0];
+    int opid = g.he[eindex].opid;
+    int opindex = g.heidtoindex[opid];
+    int n1 = g.he[eindex].nextid, p1 = g.he[eindex].previd;
+    int n2 = g.he[opindex].nextid, p2 = g.he[opindex].previd;
+    int n1index = g.heidtoindex[n1], p1index = g.heidtoindex[p1];
+    int n2index = g.heidtoindex[n2], p2index = g.heidtoindex[p2];
+    int a = g.he[eindex].vin, b = g.he[eindex].vout;
+    int c = g.he[n1index].vout, d = g.he[n2index].vout;
+
+    // halfedges whose elastic terms change (see local_elastic_energy)
+    std::vector<int> ring = {n1, p1, n2, p2, g.he[n1index].opid, g.he[p1index].opid, g.he[n2index].opid, g.he[p2index].opid};
+    std::vector<int> all = ring;
+    all.push_back(heid0);
+    all.push_back(opid);
+
+    double e_before = local_elastic_energy(g, all);
+    int etype = g.he[eindex].type, optype = g.he[opindex].type;
+    double gbb = g.find_dg(g.he[p1index].type, etype, g.he[eindex].din) + g.find_dg(etype, g.he[n1index].type, g.he[n1index].din);
+    gbb += g.find_dg(g.he[p2index].type, optype, g.he[opindex].din) + g.find_dg(optype, g.he[n2index].type, g.he[n2index].din);
+    double dg_conf = conf_free_energy(g, {heid0});
+
+    // tentatively open both faces (e itself is excluded from the after-sum)
+    g.he[n1index].previd = -1;
+    g.he[p1index].nextid = -1;
+    g.he[n2index].previd = -1;
+    g.he[p2index].nextid = -1;
+    double e_after = local_elastic_energy(g, ring);
+
+    double df = (e_after - e_before) - gbb + g.mu[etype] - dg_conf;
+    double nsurf_open = g.boundary.size() + 4; // the 4 loop edges become boundary
+    double p_remove = 2.0 / g.Nhe;
+    double p_insert = (4.0 / nsurf_open) * 0.25; // loop pick * type; the 1/2 state choice is the factor 2 below
+    // pi_open/pi_closed = (1/K) exp(-df/T) with 1/K = 4; the reverse insertion also
+    // chooses this edge's apo/holo state with probability 1/2
+    double crit = 4.0 * (p_insert / p_remove) * 0.5 * exp(-df / g.T); // = Nhe/Nsurf_open * exp(-df/T)
+
+    if (!(gsl_rng_uniform(rg) < crit))
+    {
+        g.he[n1index].previd = heid0;
+        g.he[p1index].nextid = heid0;
+        g.he[n2index].previd = opid;
+        g.he[p2index].nextid = opid;
+        return -1;
+    }
+
+    int bi = fresh_boundary_index(g);
+    g.he[eindex].nextid = -1;
+    g.he[eindex].previd = -1;
+    g.he[opindex].nextid = -1;
+    g.he[opindex].previd = -1;
+    if (g.delete_edge(heid0) < 0)
+    {
+        std::cout << "ERROR in attempt_remove_interior_dimer: could not delete edge" << std::endl;
+        std::exit(-1);
+    }
+    g.update_index();
+    for (int heid : {n1, p1, n2, p2})
+        g.he[g.heidtoindex[heid]].boundary_index = bi;
+    g.set_prev_next_boundary(n1, p1);
+    g.set_prev_next_boundary(p1, n2);
+    g.set_prev_next_boundary(n2, p2);
+    g.set_prev_next_boundary(p2, n1);
+    g.Nboundary++;
+
+    for (int vid : {a, b, c, d})
+    {
+        int vindex = g.vidtoindex[vid];
+        g.update_geometry_vertex(vindex);
+        g.update_normals_vertex(vindex);
+        g.update_excluder_top_vertex(vindex);
+    }
+    g.update_neigh_vertex(a);
+    g.update_neigh_vertex(b);
+    return 1;
+}
+
+int MC::attempt_add_interior_dimer(System &g)
+{
+    if (g.boundary.size() == 0)
+        return -1;
+    double nsurf_open = g.boundary.size();
+    int h0 = g.boundary[gsl_rng_uniform_int(rg, g.boundary.size())];
+
+    // the boundary loop through h0 must have exactly 4 edges
+    int loop[4];
+    loop[0] = h0;
+    for (int i = 1; i < 4; i++)
+    {
+        loop[i] = g.he[g.heidtoindex[loop[i - 1]]].nextid_boundary;
+        if (loop[i] == -1 || loop[i] == h0)
+            return -1;
+    }
+    if (g.he[g.heidtoindex[loop[3]]].nextid_boundary != h0)
+        return -1;
+
+    // exactly two opposite corners bonded (the wedges at c and d)
+    int i0 = -1;
+    for (int i = 0; i < 2; i++)
+    {
+        bool w0 = g.he[g.heidtoindex[loop[i]]].nextid == loop[i + 1];
+        bool u1 = g.he[g.heidtoindex[loop[i + 1]]].nextid == loop[i + 2];
+        bool w2 = g.he[g.heidtoindex[loop[i + 2]]].nextid == loop[(i + 3) % 4];
+        bool u3 = g.he[g.heidtoindex[loop[(i + 3) % 4]]].nextid == loop[i];
+        if (w0 && w2 && !u1 && !u3)
+            i0 = i;
+    }
+    if (i0 == -1)
+        return -1;
+    int n1 = loop[i0], p1 = loop[i0 + 1], n2 = loop[i0 + 2], p2 = loop[(i0 + 3) % 4];
+    int n1index = g.heidtoindex[n1], p1index = g.heidtoindex[p1];
+    int n2index = g.heidtoindex[n2], p2index = g.heidtoindex[p2];
+    int a = g.he[p1index].vout, b = g.he[p2index].vout;
+    int c = g.he[n1index].vout, d = g.he[n2index].vout;
+    if (a == b || c == d)
+        return -1;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        if (it->vin == a && it->vout == b)
+            return -1; // a-b already bonded
+    }
+
+    std::vector<int> ring = {n1, p1, n2, p2, g.he[n1index].opid, g.he[p1index].opid, g.he[n2index].opid, g.he[p2index].opid};
+    double e_before = local_elastic_energy(g, ring);
+    int bi = g.he[g.heidtoindex[h0]].boundary_index;
+
+    // insert e = a->b closing (e, n1, p1) and (op, n2, p2)
+    int etype = gsl_rng_uniform_int(rg, 4);
+    int heid0 = g.Nhelast;
+    g.add_edge_type(a, b, etype);
+    int opid = g.he[g.heidtoindex[heid0]].opid;
+    double conf_factor = 1;
+    double dg_conf = propose_new_edge_states(g, {heid0}, conf_factor);
+
+    g.set_prev_next(heid0, p1, n1);
+    g.set_prev_next(n1, heid0, p1);
+    g.set_prev_next(p1, n1, heid0);
+    g.set_prev_next(opid, p2, n2);
+    g.set_prev_next(n2, opid, p2);
+    g.set_prev_next(p2, n2, opid);
+    g.update_half_edge(heid0);
+    g.update_half_edge(opid);
+    g.update_boundary();
+    for (int vid : {a, b, c, d})
+    {
+        int vindex = g.vidtoindex[vid];
+        g.update_geometry_vertex(vindex);
+        g.update_normals_vertex(vindex);
+        g.update_excluder_top_vertex(vindex);
+    }
+    g.update_neigh_vertex(a);
+    g.update_neigh_vertex(b);
+
+    bool ok = interior_dimer_closed_ok(g, heid0);
+    double crit = 0;
+    if (ok)
+    {
+        std::vector<int> all = ring;
+        all.push_back(heid0);
+        all.push_back(opid);
+        double e_after = local_elastic_energy(g, all);
+        int eindex = g.heidtoindex[heid0], opindex = g.heidtoindex[opid];
+        int optype = g.he[opindex].type;
+        double gbb = g.find_dg(g.he[p1index].type, etype, g.he[eindex].din) + g.find_dg(etype, g.he[n1index].type, g.he[n1index].din);
+        gbb += g.find_dg(g.he[p2index].type, optype, g.he[opindex].din) + g.find_dg(optype, g.he[n2index].type, g.he[n2index].din);
+        double df = (e_after - e_before) + gbb - g.mu[etype] + dg_conf;
+        double p_remove = 2.0 / g.Nhe;
+        double p_insert = (4.0 / nsurf_open) * 0.25; // loop pick * type; the 1/2 state choice is conf_factor
+        crit = 0.25 * (p_remove / p_insert) * conf_factor * exp(-df / g.T); // K = 1/4; = Nsurf_open/Nhe * exp(-df/T)
+    }
+
+    if (ok && gsl_rng_uniform(rg) < crit)
+    {
+        g.Nboundary--;
+        return 1;
+    }
+
+    // rejected: remove e and restore the open loop
+    for (int heid : {n1, p1, n2, p2, heid0, opid})
+    {
+        int heindex = g.heidtoindex[heid];
+        if (heid == n1 || heid == n2 || heid == heid0 || heid == opid)
+            g.he[heindex].previd = -1;
+        if (heid == p1 || heid == p2 || heid == heid0 || heid == opid)
+            g.he[heindex].nextid = -1;
+    }
+    if (g.delete_edge(heid0) < 0)
+    {
+        std::cout << "ERROR in attempt_add_interior_dimer: could not delete edge" << std::endl;
+        std::exit(-1);
+    }
+    g.update_index();
+    for (int heid : {n1, p1, n2, p2})
+        g.he[g.heidtoindex[heid]].boundary_index = bi;
+    g.set_prev_next_boundary(n1, p1);
+    g.set_prev_next_boundary(p1, n2);
+    g.set_prev_next_boundary(n2, p2);
+    g.set_prev_next_boundary(p2, n1);
+    for (int vid : {a, b, c, d})
+    {
+        int vindex = g.vidtoindex[vid];
+        g.update_geometry_vertex(vindex);
+        g.update_normals_vertex(vindex);
+        g.update_excluder_top_vertex(vindex);
+    }
+    g.update_neigh_vertex(a);
+    g.update_neigh_vertex(b);
+    return -1;
+}
+
 int MC::attempt_add_drug(System &g, int heid0)
 {
 
@@ -6153,6 +6561,9 @@ int MC::attempt_add_trimer_dimer(System &g)
     // sum is exactly equal to the full before/after energy difference (see
     // the matching note in attempt_remove_trimer_dimer), without having to
     // pay for a full g.compute_energy() over a potentially large mesh.
+    // apo/holo states of the 3 new edges (before their stretch energy is evaluated)
+    double conf_factor = 1;
+    double dg_conf = propose_new_edge_states(g, {heid0, heid1, heid2}, conf_factor);
     double de = g.stretch_energy(g.heidtoindex[heid0]) + g.dimer_bend_energy(g.heidtoindex[heid0]);
     de += g.stretch_energy(g.heidtoindex[heid1]) + g.dimer_bend_energy(g.heidtoindex[heid1]);
     de += g.stretch_energy(g.heidtoindex[heid2]) + g.dimer_bend_energy(g.heidtoindex[heid2]);
@@ -6160,11 +6571,12 @@ int MC::attempt_add_trimer_dimer(System &g)
     double gbb = g.find_gbb(etype0, etype1, etype2);
     double mu_sum = g.mu[etype0] + g.mu[etype1] + g.mu[etype2];
     de += gbb - mu_sum;
+    de += dg_conf;
 
     // Metropolis criterion: dE is the full grand-potential change (elastic
     // energy of the new face, plus its binding free energy, minus the
     // chemical potential of the 3 dimers drawn from the bulk reservoir).
-    double crit = exp(-de / g.T);
+    double crit = exp(-de / g.T) * conf_factor;
 
     if (g.Test_assembly == 1)
     {
@@ -6346,6 +6758,7 @@ int MC::attempt_remove_trimer_dimer(System &g)
     double gbb = g.find_gbb(etype0, etype1, etype2);
     double mu_sum = g.mu[etype0] + g.mu[etype1] + g.mu[etype2];
     de += -gbb + mu_sum; // de = -de_add for this same triangle
+    de -= conf_free_energy(g, {g.he[heindex0].id, g.he[heindex1].id, g.he[heindex2].id});
 
     double crit = exp(-de / g.T);
 
@@ -6724,13 +7137,17 @@ int MC::attempt_add_monomer_bridge(System &g)
     // these 2 new edges are isolated (their opposites are freshly created
     // and fully unbound), so nothing else about the rest of the mesh
     // depends on these specific new half-edge ids.
+    // apo/holo states of the 2 new edges (before their stretch energy is evaluated)
+    double conf_factor = 1;
+    double dg_conf = propose_new_edge_states(g, {enterA, enterB}, conf_factor);
     double de = g.stretch_energy(g.heidtoindex[enterA]) + g.dimer_bend_energy(g.heidtoindex[enterA]);
     de += g.stretch_energy(g.heidtoindex[enterB]) + g.dimer_bend_energy(g.heidtoindex[enterB]);
     de += gapBondEnergy; // lost when P1-Q1 / P2-Q2's own bond is broken by this insertion
     double mu_sum = g.mu[etypeA] + g.mu[etypeB];
     de -= mu_sum; // no other gbb term: the 2 new bonds don't bind to each other
+    de += dg_conf;
 
-    double crit = exp(-de / g.T);
+    double crit = exp(-de / g.T) * conf_factor;
 
     if (g.Test_assembly == 1)
     {
@@ -6945,6 +7362,7 @@ int MC::attempt_remove_monomer_bridge(System &g)
     double de = -g.vertex_energy(vid0);
     double mu_sum = g.mu[etype1] + g.mu[etype2];
     de += mu_sum; // no gbb term: the 2 bonds don't bind to each other
+    de -= conf_free_energy(g, {c.enter1, c.enter2});
 
     double crit = exp(-de / g.T);
 

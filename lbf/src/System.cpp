@@ -28,6 +28,7 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	phi0 = nullptr;
 	dmu = 0;
 	dG_apoholo = 0;
+	dG_apoholo_sol = 0;
 	ks0 = 0;
 	kd0 = 0;
 	dg01 = 0;
@@ -267,8 +268,24 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	//Equilibrium bond lengths, holo state (defaults to the apo value set above unless overridden)
 	if(theParams.is_key("l0_CD_holo")) { l0h[0] = std::stod(theParams.get_value("l0_CD_holo")); l0h[3] = l0h[0]; }
 	if(theParams.is_key("l0_AB_holo")) { l0h[1] = std::stod(theParams.get_value("l0_AB_holo")); l0h[2] = l0h[1]; }
+	//Per-type equilibrium bond lengths (l0..l3 apo, l0h..l3h holo); override the family keys above
+	//Holo lengths not given explicitly fall back to the apo value
+	for (int i = 0; i < Ntype; i++)
+	{
+		std::string key = "l" + std::to_string(i);
+		if(theParams.is_key(key)) l0[i] = std::stod(theParams.get_value(key));
+	}
+	for (int i = 0; i < Ntype; i++)
+	{
+		std::string key = "l" + std::to_string(i) + "h";
+		if(theParams.is_key(key)) l0h[i] = std::stod(theParams.get_value(key));
+		else if(!theParams.is_key(i == 0 || i == 3 ? "l0_CD_holo" : "l0_AB_holo")) l0h[i] = l0[i];
+	}
 	//Conformational (apo/holo) free energy difference, G_holo - G_apo
 	if(theParams.is_key("dG_apoholo")) dG_apoholo = std::stod(theParams.get_value("dG_apoholo"));
+	//Solution-phase G_holo - G_apo; mu is the chemical potential of all solution dimers (apo + holo)
+	dG_apoholo_sol = dG_apoholo;
+	if(theParams.is_key("dG_apoholo_sol")) dG_apoholo_sol = std::stod(theParams.get_value("dG_apoholo_sol"));
 	//if(theParams.is_key("muAB")) mu[1] = std::stod(theParams.get_value("muAB"));
 	//Drug chemical potential
 	if(theParams.is_key("mudrug")) mudrug = std::stod(theParams.get_value("mudrug"));
@@ -488,6 +505,32 @@ void System::update_index()
 		//v[vidtoindex[it->vin]].hein.push_back(*it);
 	}
 	//cout <<"T5" <<endl;
+}
+
+void System::compute_stretch_energy_apo_holo(double &eapo, double &eholo)
+{
+	//Bond stretching (strain) energy, each edge counted once, split by conformational state
+	eapo = 0;
+	eholo = 0;
+	for (vector<HE>::iterator it = he.begin(); it != he.end(); ++it)
+	{
+		double e = stretch_energy(heidtoindex[it->id]) * .5;
+		if (it->holo)
+			eholo += e;
+		else
+			eapo += e;
+	}
+}
+
+int System::count_holo_he()
+{
+	int nholo = 0;
+	for (vector<HE>::iterator it = he.begin(); it != he.end(); ++it)
+	{
+		if (it->holo)
+			nholo++;
+	}
+	return nholo;
 }
 
 void System::check_odd_neigh()
@@ -1376,7 +1419,8 @@ void System::add_half_edge_type(int vin0, int vout0, int etype, int b_index)
 {
 	if (vin0 >= Nvlast || vout0 >= Nvlast)
 	{
-		cout << "ERROR in update_half_type , Nvlast" << endl;
+		cout << "ERROR in update_half_type , Nvlast vin0 is " << vin0 << " vout0 is " << vout0 << endl;
+		exit(-1);
 	}
 	else if (vin0 < 0 || vout0 < 0)
 	{
@@ -4828,6 +4872,32 @@ void read_lammps_data(System &g, char filename[])
 	//exit(-1);
 }
 
+/* Read one bond line: "id type vin vout [holo]". The holo column was added
+ * with the apo/holo model; older restart files omit it, so default to apo. */
+static void read_bond_line(System &g, FILE *file)
+{
+	char line[256];
+	int id, btype, vin, vout, holo = 0;
+	while (fgets(line, sizeof(line), file))
+	{
+		int n = sscanf(line, "%d %d %d %d %d", &id, &btype, &vin, &vout, &holo);
+		if (n <= 0)
+			continue; // blank line
+		if (n < 4)
+		{
+			cout << "ERROR reading bond line: " << line << endl;
+			exit(-1);
+		}
+		if (n == 4)
+			holo = 0;
+		g.add_half_edge_type(vin - 1, vout - 1, btype - 1, -1);
+		g.he[g.Nhe - 1].holo = (holo != 0);
+		return;
+	}
+	cout << "ERROR: unexpected end of file while reading bonds" << endl;
+	exit(-1);
+}
+
 /* this fuction should be updated with boundary index */
 int read_restart_lammps_data_file(System &g, char filename[])
 {
@@ -4836,7 +4906,7 @@ int read_restart_lammps_data_file(System &g, char filename[])
 	int fNhe = 0;
 
 	char s[100];
-	char temp1[20], temp2[20], temp0[20], temp3[20];
+	char temp1[20], temp2[20], temp0[20];
 	char TT[] = "Bonds";
 	//char AA[] = "Atoms";
 	char GG[] = "Angles";
@@ -4905,9 +4975,7 @@ int read_restart_lammps_data_file(System &g, char filename[])
 		/* this part needs update for boundary edges with boundary index*/
 		for (int i = 0; i < fNhe; i++)
 		{
-			x = fscanf(file, "%*s %s %s %s %s\n", temp0, temp1, temp2, temp3);
-			g.add_half_edge_type(atoi(temp1) - 1, atoi(temp2) - 1, atoi(temp0) - 1, -1);
-			g.he[g.Nhe - 1].holo = (atoi(temp3) != 0);
+			read_bond_line(g, file);
 			//fprintf(stderr, "add edge %d  %d %d %d\n",i,atoi(temp1)-1, atoi(temp2)-1,atoi(temp0)-1 );
 			//cout << i <<endl;
 		}
@@ -4970,7 +5038,7 @@ int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step = -1)
 {
 
 	char s[100];
-	char temp1[20], temp2[20], temp0[20], temp3[20];
+	char temp1[20], temp2[20], temp0[20];
 	char TT[] = "Bonds";
 	char GG[] = "Angles";
 	char II[] = "Impropers";
@@ -5051,10 +5119,8 @@ int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step = -1)
 			cout << "fNhe is " << fNhe << endl;
 			for (int i = 0; i < fNhe; i++)
 			{
-				x = fscanf(trajfile, "%*s %s %s %s %s\n", temp0, temp1, temp2, temp3);
-				g.add_half_edge_type(atoi(temp1) - 1, atoi(temp2) - 1, atoi(temp0) - 1, -1);
-				g.he[g.Nhe - 1].holo = (atoi(temp3) != 0);
-				fprintf(stderr, "add edge %d  %d %d %d\n", i, atoi(temp1) - 1, atoi(temp2) - 1, atoi(temp0) - 1);
+				read_bond_line(g, trajfile);
+				fprintf(stderr, "add edge %d  %d %d %d\n", i, g.he[g.Nhe - 1].vin, g.he[g.Nhe - 1].vout, g.he[g.Nhe - 1].type);
 				//cout << i <<endl;
 			}
 

@@ -118,6 +118,14 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             cout << "######### ENERGY " << ee << " ##############" << endl;
             cout << "######### ENERGY PER DIMER " << 2 * ee / sys.Nhe << " ##############" << endl;
             cout << "#########  NHE " << sys.Nhe << " #######################" << endl;
+            int nholo = sys.count_holo_he();
+            cout << "#########  NHE_APO " << sys.Nhe - nholo << " ##############" << endl;
+            cout << "#########  NHE_HOLO " << nholo << " ##############" << endl;
+            double estrain_apo, estrain_holo;
+            sys.compute_stretch_energy_apo_holo(estrain_apo, estrain_holo);
+            cout << "#########  STRAIN ENERGY " << estrain_apo + estrain_holo << " ##############" << endl;
+            cout << "#########  STRAIN ENERGY APO " << estrain_apo << " ##############" << endl;
+            cout << "#########  STRAIN ENERGY HOLO " << estrain_holo << " ##############" << endl;
             cout << "#########  NHESURF " << sys.boundary.size() << " ##############" << endl;
             cout << "#########  NVSURF " << sys.boundaryv.size() << " ##############" << endl;
             cout << "#########  NV_BONDSURF " << sys.boundaryvbond.size() << " ##############" << endl;
@@ -133,6 +141,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             cout << "#########  DrugRemoved " << drugremoved << " ##############" << endl;
             cout << "#########  ND " << sys.Nd << " ##############" << endl;
             cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
+            cout << "#########  APO/HOLO CHANGED " << solver.apoholochanged << " ##############" << endl;
+            cout << "#########  INTERIOR DIMER REMOVED " << solver.interiorremoved << " ADDED " << solver.interioradded << " ##############" << endl;
             cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
             cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
             cout << "#########  FUSION " << fusion << " ##############" << endl;
@@ -332,6 +342,14 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     cout << "######### ENERGY " << ee << " ##############" << endl;
     cout << "######### ENERGY PER DIMER " << 2 * ee / sys.Nhe << " ##############" << endl;
     cout << "#########  NHE " << sys.Nhe << " #######################" << endl;
+    int nholo = sys.count_holo_he();
+    cout << "#########  NHE_APO " << sys.Nhe - nholo << " ##############" << endl;
+    cout << "#########  NHE_HOLO " << nholo << " ##############" << endl;
+    double estrain_apo, estrain_holo;
+    sys.compute_stretch_energy_apo_holo(estrain_apo, estrain_holo);
+    cout << "#########  STRAIN ENERGY " << estrain_apo + estrain_holo << " ##############" << endl;
+    cout << "#########  STRAIN ENERGY APO " << estrain_apo << " ##############" << endl;
+    cout << "#########  STRAIN ENERGY HOLO " << estrain_holo << " ##############" << endl;
     cout << "#########  NHESURF " << sys.boundary.size() << " ##############" << endl;
     cout << "#########  NVSURF " << sys.boundaryv.size() << " ##############" << endl;
     cout << "#########  NV_BONDSURF " << sys.boundaryvbond.size() << " ##############" << endl;
@@ -347,6 +365,8 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     cout << "#########  DrugRemoved " << drugremoved << " ##############" << endl;
     cout << "#########  ND " << sys.Nd << " ##############" << endl;
     cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
+    cout << "#########  APO/HOLO CHANGED " << solver.apoholochanged << " ##############" << endl;
+    cout << "#########  INTERIOR DIMER REMOVED " << solver.interiorremoved << " ADDED " << solver.interioradded << " ##############" << endl;
     cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
     cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
     cout << "#########  FUSION " << fusion << " ##############" << endl;

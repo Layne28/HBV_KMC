@@ -58,6 +58,11 @@ void Observer::dump_parameters(System &theSys, std::string subdir)
     fprintf(fi, "l_thermal_kappa %.5f\n", theSys.l_thermal_kappa);
     fprintf(fi, "l_thermal_epsilon %.5f\n", theSys.l_thermal_sigma);
     fprintf(fi, "gaussian sigma %.5f\n", theSys.gaussian_sigma);
+    for (int i = 0; i < theSys.Ntype; i++)
+    {
+        fprintf(fi, "bond type %d l0_apo %.4f l0_holo %.4f\n", i, theSys.l0[i], theSys.l0h[i]);
+    }
+    fprintf(fi, "dG_apoholo %.4f dG_apoholo_sol %.4f\n", theSys.dG_apoholo, theSys.dG_apoholo_sol);
 
     fflush(fi);
     fclose(fi);

@@ -31,6 +31,8 @@ SHELL = /bin/sh
 
 # Flags to pass to the compiler; per the reccomendations of the GNU Scientific Library
 CXXFLAGS:= -std=c++17 -Wextra -pedantic -Wall -W -Wmissing-declarations -Wuninitialized -Wshadow -Wpointer-arith -Wcast-align -Wwrite-strings -fshort-enums -fno-common -m64 -fopenmp -fPIE -I$(HOME)/.local/include
+# Generate .d files so objects are rebuilt when an included header changes
+CXXFLAGS += -MMD -MP
 
 # Compiler flags controling optimization levels. Use -O3 for full optimization,
 # but make sure your results are consistent
@@ -80,6 +82,8 @@ $(LIB): $(OBJECTS_LIB)
 $(BIN_DIR)/$(TEST_EXECUTABLE): $(TEST_OBJECTS)
 	$(CXX) $(TEST_OBJECTS) $(LDFLAGS) -o $@
 
+-include $(OBJECTS:.o=.d) $(OBJECTS_LIB:.o=.d) $(TEST_OBJECTS:.o=.d)
+
 # clean up so we can start over (removes executable!)
 clean:
-	rm -f $(OBJ_DIR)/*.o $(LIB_OBJ_DIR)/*.o $(TEST_OBJ_DIR)/*.o $(BIN_DIR)/$(EXECUTABLE) $(BIN_DIR)/$(TEST_EXECUTABLE) $(LIB_DIR)/*.so
+	rm -f $(OBJ_DIR)/*.o $(OBJ_DIR)/*.d $(LIB_OBJ_DIR)/*.o $(LIB_OBJ_DIR)/*.d $(TEST_OBJ_DIR)/*.o $(TEST_OBJ_DIR)/*.d $(BIN_DIR)/$(EXECUTABLE) $(BIN_DIR)/$(TEST_EXECUTABLE) $(LIB_DIR)/*.so
