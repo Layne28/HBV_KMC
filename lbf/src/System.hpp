@@ -45,6 +45,7 @@ struct HE
 	double l; // length of halfedge
 	//bool dout;
 	bool din; // drug boolian at the vin
+	bool holo; // conformational state of the edge (dimer this halfedge belongs to): false=apo, true=holo. Always kept equal between a halfedge and its opposite.
 
 	int prev_fusion_heid;		//previous fusion pair halfedge id
 	int next_fusion_heid;		//next fusion pair halfedge id
@@ -115,6 +116,7 @@ public:
 	double mudimer;
 	double *mu;
 	double dmu;
+	double dG_apoholo; // conformational free energy difference G_holo - G_apo, controls apo/holo equilibrium for every edge
 	double mudrug;
 	double ks0;
 	double kd0;
@@ -141,7 +143,8 @@ public:
 	double *phi0;
 	double *kappaPhi;
 	double *theta0;
-	double *l0;
+	double *l0;  // equilibrium bond length per type, apo state
+	double *l0h; // equilibrium bond length per type, holo state
 	double **gb;
 	double **gdrug;
 	

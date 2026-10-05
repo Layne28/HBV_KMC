@@ -23,9 +23,11 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	kappa = nullptr;
 	kappaPhi = nullptr;
 	l0 = nullptr;
+	l0h = nullptr;
 	theta0 = nullptr;
 	phi0 = nullptr;
 	dmu = 0;
+	dG_apoholo = 0;
 	ks0 = 0;
 	kd0 = 0;
 	dg01 = 0;
@@ -42,6 +44,12 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
     l0[1] = .95;
     l0[2] = .95;
     l0[3] = 1.05;
+
+    //Set default equilibrium bond lengths in the holo state (same as apo by default, i.e. no effect unless overridden)
+    l0h[0] = 1.05;
+    l0h[1] = .95;
+    l0h[2] = .95;
+    l0h[3] = 1.05;
 
     //Set default equilibrium bond angles (note: in the paper, this is theta0!)
     phi0[0] = 1.05; //DC-CD
@@ -200,6 +208,7 @@ System::~System() {
 	delete[] theta0;
 	delete[] phi0;
 	delete[] l0;
+	delete[] l0h;
 	delete[] mu;
 	delete[] vidtoindex;
 	delete[] heidtoindex;
@@ -252,6 +261,14 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	//Chemical potentials
 	if(theParams.is_key("muCD")) mu[0] = std::stod(theParams.get_value("muCD"));
 	if(theParams.is_key("dmu")) dmu = std::stod(theParams.get_value("dmu"));
+	//Equilibrium bond lengths, apo state (index 0/3 = CD/DC family, 1/2 = BA/AB family)
+	if(theParams.is_key("l0_CD")) { l0[0] = std::stod(theParams.get_value("l0_CD")); l0[3] = l0[0]; }
+	if(theParams.is_key("l0_AB")) { l0[1] = std::stod(theParams.get_value("l0_AB")); l0[2] = l0[1]; }
+	//Equilibrium bond lengths, holo state (defaults to the apo value set above unless overridden)
+	if(theParams.is_key("l0_CD_holo")) { l0h[0] = std::stod(theParams.get_value("l0_CD_holo")); l0h[3] = l0h[0]; }
+	if(theParams.is_key("l0_AB_holo")) { l0h[1] = std::stod(theParams.get_value("l0_AB_holo")); l0h[2] = l0h[1]; }
+	//Conformational (apo/holo) free energy difference, G_holo - G_apo
+	if(theParams.is_key("dG_apoholo")) dG_apoholo = std::stod(theParams.get_value("dG_apoholo"));
 	//if(theParams.is_key("muAB")) mu[1] = std::stod(theParams.get_value("muAB"));
 	//Drug chemical potential
 	if(theParams.is_key("mudrug")) mudrug = std::stod(theParams.get_value("mudrug"));
@@ -364,6 +381,7 @@ void System::initialize(int Ntype0)
 	kappaPhi = new double[Ntype];
 	theta0 = new double[Ntype];
 	l0 = new double[Ntype];
+	l0h = new double[Ntype];
 	phi0 = new double[Ntype];
 	mu = new double[Ntype];
 	gb = new double *[Ntype];
@@ -377,6 +395,7 @@ void System::initialize(int Ntype0)
 		phi0[i] = -1;
 		theta0[i] = -1;
 		l0[i] = -1;
+		l0h[i] = -1;
 		gb[i] = new double[Ntype];
 		gdrug[i] = new double[Ntype];
 		for (int j = 0; j < Ntype; j++)
@@ -1869,6 +1888,7 @@ void System::he_initialize(int heindex, int heid0, int vin0, int vout0, int etyp
 	delete[] tempv;
 	he[heindex].din = 0;
 	//he[heindex].dout = 0;
+	he[heindex].holo = false; // new edges start in the apo state
 	heidtoindex[heid0] = heindex;
 }
 
@@ -3554,11 +3574,12 @@ double System::find_dg(int type, int typenext, bool drug)
 double System::stretch_energy(int heindex0)
 {
 	int et = he[heindex0].type;
+	double leq = he[heindex0].holo ? l0h[et] : l0[et];
 
 	//cout<<  "epsilon[et]" << epsilon[et]  <<endl;
 	//cout<<  "(he[heindex0].l " << he[heindex0].l <<endl ;
-	//cout <<"stretch energy is " <<  0.5 * epsilon[et] * (he[heindex0].l - l0[et]) * (he[heindex0].l - l0[et]) <<endl;
-	return 0.5 * epsilon[et] * (he[heindex0].l - l0[et]) * (he[heindex0].l - l0[et]);
+	//cout <<"stretch energy is " <<  0.5 * epsilon[et] * (he[heindex0].l - leq) * (he[heindex0].l - leq) <<endl;
+	return 0.5 * epsilon[et] * (he[heindex0].l - leq) * (he[heindex0].l - leq);
 }
 
 int System::check_bind_wedge(int heid0)
@@ -4815,7 +4836,7 @@ int read_restart_lammps_data_file(System &g, char filename[])
 	int fNhe = 0;
 
 	char s[100];
-	char temp1[20], temp2[20], temp0[20];
+	char temp1[20], temp2[20], temp0[20], temp3[20];
 	char TT[] = "Bonds";
 	//char AA[] = "Atoms";
 	char GG[] = "Angles";
@@ -4884,8 +4905,9 @@ int read_restart_lammps_data_file(System &g, char filename[])
 		/* this part needs update for boundary edges with boundary index*/
 		for (int i = 0; i < fNhe; i++)
 		{
-			x = fscanf(file, "%*s %s %s %s\n", temp0, temp1, temp2);
+			x = fscanf(file, "%*s %s %s %s %s\n", temp0, temp1, temp2, temp3);
 			g.add_half_edge_type(atoi(temp1) - 1, atoi(temp2) - 1, atoi(temp0) - 1, -1);
+			g.he[g.Nhe - 1].holo = (atoi(temp3) != 0);
 			//fprintf(stderr, "add edge %d  %d %d %d\n",i,atoi(temp1)-1, atoi(temp2)-1,atoi(temp0)-1 );
 			//cout << i <<endl;
 		}
@@ -4948,7 +4970,7 @@ int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step = -1)
 {
 
 	char s[100];
-	char temp1[20], temp2[20], temp0[20];
+	char temp1[20], temp2[20], temp0[20], temp3[20];
 	char TT[] = "Bonds";
 	char GG[] = "Angles";
 	char II[] = "Impropers";
@@ -5029,8 +5051,9 @@ int read_restart_lammps_data_traj(System &g, FILE *trajfile, int step = -1)
 			cout << "fNhe is " << fNhe << endl;
 			for (int i = 0; i < fNhe; i++)
 			{
-				x = fscanf(trajfile, "%*s %s %s %s\n", temp0, temp1, temp2);
+				x = fscanf(trajfile, "%*s %s %s %s %s\n", temp0, temp1, temp2, temp3);
 				g.add_half_edge_type(atoi(temp1) - 1, atoi(temp2) - 1, atoi(temp0) - 1, -1);
+				g.he[g.Nhe - 1].holo = (atoi(temp3) != 0);
 				fprintf(stderr, "add edge %d  %d %d %d\n", i, atoi(temp1) - 1, atoi(temp2) - 1, atoi(temp0) - 1);
 				//cout << i <<endl;
 			}

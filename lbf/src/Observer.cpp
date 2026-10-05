@@ -213,7 +213,7 @@ void dump_lammps_traj_restart(System &g, int time0)
 			exit(-1);
 		}
 		int btype = it->type + 1;
-		fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
+		fprintf(f, "\n%li %d %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1, it->holo ? 1 : 0);
 	}
 	fprintf(f, "\n");
 	fprintf(f, "\nAngles"); // this is he - next -prev
@@ -860,7 +860,7 @@ void dump_restart_lammps_data_file(System &g, int time0)
 			exit(-1);
 		}
 		int btype = it->type + 1;
-		fprintf(f, "\n%li %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1);
+		fprintf(f, "\n%li %d %d %d %d", distance(g.he.begin(), it) + 1, btype, g.vidtoindex[it->vin] + 1, g.vidtoindex[it->vout] + 1, it->holo ? 1 : 0);
 	}
 	fprintf(f, "\n");
 	fprintf(f, "\nAngles"); // this is he - next -prev

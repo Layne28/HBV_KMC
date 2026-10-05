@@ -43,6 +43,7 @@ public:
     int drugadded = 0;
     int drugremoved = 0;
     int typechanged = 0;
+    int apoholochanged = 0;
     int fusion = 0;
     int fission = 0;
     int wedgefusion = 0;
@@ -101,6 +102,7 @@ public:
     int attempt_vertex_fission(System &g);
     int attempt_change_edge_type(System &g, int heid0);
     int attempt_change_edge_type_tri(System &g, int heid0);
+    int attempt_switch_apo_holo(System &g, int heid0);
     int old_attempt_bind_wedge_dimer(System &g, int heid0);
     int attempt_bind_wedge_dimer(System &g, int heid0);
 

@@ -349,6 +349,16 @@ void MC::sweep(System &g)
         }
     }
 
+    /*** Apo/holo conformational switch (same attempt frequency as the quasi-equivalent type switch above) ***/
+    for (int nc = 0; nc < g.Nhe/2; nc++)
+    {
+        int ind1 = gsl_rng_uniform_int(rg, g.Nhe);
+        int e1 = g.he[ind1].id;
+        int x = attempt_switch_apo_holo(g, e1);
+        if (x >= 0)
+            apoholochanged++;
+    }
+
     /*** Add monomers/dimers ***/
     ps_attempt = ks0 * g.Nsurf;
     if (gsl_rng_uniform(rg) < ps_attempt)
@@ -4424,6 +4434,39 @@ int MC::attempt_change_edge_type(System &g, int heid0)
         g.update_half_edge(heid0);
         g.update_half_edge(g.he[heindex0].opid);
         //std::cout << " change_type not accepted"<<endl;
+        return -1;
+    }
+}
+
+/* Attempt to switch the apo/holo conformational state of an edge (both
+ * halfedges of the pair, which always carry the same state). This is
+ * independent of the AB/CD quasi-equivalent type (g.he[].type): it only
+ * changes which equilibrium bond length (g.l0 vs g.l0h) subsequent stretch
+ * energy evaluations will use for this edge. As with attempt_change_edge_type,
+ * the type-dependent binding/bend energies are unaffected by this move (type
+ * doesn't change), so the Metropolis criterion only involves the conformational
+ * free energy difference g.dG_apoholo, mirroring how g.mu/g.dmu bias the AB/CD switch. */
+int MC::attempt_switch_apo_holo(System &g, int heid0)
+{
+    int heindex0 = g.heidtoindex[heid0];
+    int heopindex0 = g.heidtoindex[g.he[heindex0].opid];
+
+    bool oldholo = g.he[heindex0].holo;
+    bool newholo = !oldholo;
+
+    double mu_old = oldholo ? -g.dG_apoholo : 0.0;
+    double mu_new = newholo ? -g.dG_apoholo : 0.0;
+
+    double de = -mu_new - (-mu_old);
+    double crit = exp(-de / g.T);
+    if (gsl_rng_uniform(rg) < crit)
+    {
+        g.he[heindex0].holo = newholo;
+        g.he[heopindex0].holo = newholo;
+        return (int)newholo;
+    }
+    else
+    {
         return -1;
     }
 }
