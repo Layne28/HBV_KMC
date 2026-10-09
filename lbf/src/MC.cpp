@@ -395,14 +395,42 @@ void MC::sweep(System &g)
 
         if (g.Nhe > 15) 
         {
-            int cc = check_bind_triangle(g);
-            if (cc > 0)
+            int cc = -1;
+            if (g.boundary.size() > 0)
             {
-                cout << "bound triangle" << endl;
-                g.update_boundary();
-                boundtri += cc;
+                // Attempt to close a 3-edge boundary hole into a bonded triangle.
+                // Must be energy-gated (not the unconditional check_bind_triangle),
+                // otherwise this move has acceptance 1 with no reverse move,
+                // breaking detailed balance and preventing a closed shell from
+                // ever disassembling regardless of gb0.
+                int indbt = gsl_rng_uniform_int(rg, g.boundary.size());
+                int hhbt = g.boundary[indbt];
+                cc = attempt_bind_triangle(g, hhbt);
+                if (cc > 0)
+                {
+                    cout << "bound triangle" << endl;
+                    g.update_boundary();
+                    boundtri += cc;
+                }
             }
-            else 
+
+            {
+                // Reverse of attempt_bind_triangle: break a fully-bonded (interior)
+                // triangle back open. Candidates are drawn from all half-edges
+                // (not g.boundary) since this move must remain reachable even when
+                // the shell is fully closed and g.boundary is empty.
+                int indut = gsl_rng_uniform_int(rg, g.Nhe);
+                int hhut = g.he[indut].id;
+                int uu = attempt_unbind_triangle(g, hhut);
+                if (uu > 0)
+                {
+                    cout << "unbound triangle" << endl;
+                    g.update_boundary();
+                    unboundtri += uu;
+                }
+            }
+
+            if (cc <= 0)
             {
                 /*** Bind wedge ***/
                 //if (gsl_rng_uniform(r) < pb_attempt){
@@ -2223,7 +2251,11 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             //double *dis_vector=new double[3];
             int heidtemp=g.he[nextopindex0].nextid;
             int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[heopindex0].type); // heopindex0 = g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
-            if(dov==-1) return -1;
+            if(dov==-1)
+            {
+                delete[] tempv1;
+                return -1;
+            }
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
@@ -2359,7 +2391,11 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             //double *dis_vector=new double[3];
             int heidtemp=g.he[heopindex0].nextid;
             int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[prevopindex0].type); // prevopindex = ? g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
-            if(dov==-1) return -1;
+            if(dov==-1)
+            {
+                delete[] tempv1;
+                return -1;
+            }
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
@@ -2666,7 +2702,11 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             //double *dis_vector=new double[3];
             int heidtemp=g.he[nextopindex0].nextid;
             int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[heopindex0].type); // heopindex0 = g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
-            if(dov==-1) return -1;
+            if(dov==-1)
+            {
+                delete[] tempv1;
+                return -1;
+            }
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
@@ -2822,7 +2862,11 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
             //double *dis_vector=new double[3];
             int heidtemp=g.he[heopindex0].nextid;
             int dov = g.new_vertex_edge(g.heidtoindex[heidtemp], tempv1,g.he[prevopindex0].type); // prevopindex = ? g.heidtoindex[g.he[g.heidtoindex[heidtemp]].nextid]
-            if(dov==-1) return -1;
+            if(dov==-1)
+            {
+                delete[] tempv1;
+                return -1;
+            }
             double dis_new=veclen(tempv1,g.v[g.vidtoindex[vi]].co);
             //std::cout<<"tmpv1 "<< tempv1[0] <<" "<<tempv1[1] <<" "<<tempv1[2] <<" "<<endl;
             //std::cout<<dis_new << " " << isnan(dis_new)<<endl;
@@ -3050,6 +3094,23 @@ int MC::attempt_wedge_fusion(System &g)
         std::cout << "WRONG Geometry in wedge fusion" << endl;
         std::exit(-1);
     }
+
+    // heidm is assumed to be the third edge that closes the
+    // (heid_prev, heid_next, heidm) triangle once vidi/vidj are merged, but
+    // get_next_fusion_heid only verifies that vidi and vidj are *connected*
+    // by some path in the mesh graph, not that this specific mesh-adjacent
+    // edge actually closes the triangle. One of the two vin/vout relations
+    // is guaranteed by direct mesh adjacency depending on which branch above
+    // picked heidm; check the other one explicitly and reject rather than
+    // corrupt the mesh / crash in set_prev_next below.
+    bool heidm_closes_triangle = (bondnextm > 0)
+        ? (g.he[g.heidtoindex[heidm]].vout == g.he[heindex_prev].vin)
+        : (g.he[g.heidtoindex[heidm]].vin == g.he[heindex_next].vout);
+    if (!heidm_closes_triangle)
+    {
+        return -1;
+    }
+
     // now save th status
     //std::cout << "heid_prev " << heid_prev << " heid_next " << heid_next<< "heidm" << heidm <<endl;
 
@@ -3434,6 +3495,18 @@ int MC::attempt_wedge_fission(System &g)
     int previdboundary0 = g.he[g.heidtoindex[nextidboundary0]].previd_boundary;
     //std::cout << "00 wedge fission of vertex  " << vid0 <<endl;
     //std::cout << "in wedge fission Nv is " << g.Nv << " Nvlast is " << g.Nvlast <<endl;
+
+    // vid0's doubleboundary==-1 check above is meant to guarantee vid0 isn't
+    // a boundary-loop junction, but that flag is only ever set for vertices
+    // touched by exactly 2 boundary edges (see update_boundary()); a vertex
+    // touched by 3+ loops reads as doubleboundary==-1 too. In that case
+    // heboundaryoutid may not even be on heid0's own loop. Nothing has been
+    // mutated yet, so it's safe to just reject rather than proceed on a
+    // mismatched loop.
+    if (g.he[g.heidtoindex[nextidboundary0]].boundary_index != bi)
+    {
+        return -1;
+    }
 
     if (g.v[vindex0].hein.size() < 4)
     { //std::cout << "hein<4" <<endl;
@@ -4694,8 +4767,9 @@ int MC::attempt_fission(System &g)
 
     if (g.he[g.heidtoindex[heid_prev]].boundary_index != g.he[g.heidtoindex[heid_next]].boundary_index)
     {
-        std::cout << "error in fission wrong boundary index " << g.he[g.heidtoindex[heid_prev]].boundary_index << "and " << g.he[g.heidtoindex[heid_next]].boundary_index << endl;
-        std::exit(-1);
+        // Nothing has been mutated yet, so it's safe to just reject this
+        // candidate instead of crashing the whole run.
+        return -1;
     }
 
     // vertex should be double boundary
@@ -4754,8 +4828,11 @@ int MC::attempt_fission(System &g)
 
     if (nextidboundary0 == -1 || previdboundary0 == -1)
     {
-        std::cout << "error in fission" << endl;
-        std::exit(-1);
+        // Undo the bond break above (nothing else has been mutated yet)
+        // and reject this candidate instead of crashing the whole run.
+        g.he[g.heidtoindex[heid_prev]].nextid = heid_next;
+        g.he[g.heidtoindex[heid_next]].previd = heid_prev;
+        return -1;
     }
 
     int newvid_prev = -1;
@@ -5390,14 +5467,17 @@ int MC::attempt_bind_triangle(System &g, int heid0) //
         g.he[prevboundaryindex0].boundary_index = bi;
         g.he[nextboundaryindex0].boundary_index = bi;
 
-        g.set_prev_next_boundary(g.he[prevboundaryindex0].id, g.he[heindex0].id);
-        g.set_prev_next_boundary(g.he[heindex0].id, g.he[nextboundaryindex0].id);
-        g.set_prev_next_boundary(g.he[nextboundaryindex0].id, g.he[prevboundaryindex0].id);
-
+        // set_prev_next_boundary requires its arguments to already read as
+        // boundary edges (is_boundary() true), so nextid/previd must be
+        // nulled out before linking them into the boundary chain.
         g.he[heindex0].nextid = -1;
         g.he[heindex0].previd = -1;
         g.he[nextboundaryindex0].previd = -1;
         g.he[prevboundaryindex0].nextid = -1;
+
+        g.set_prev_next_boundary(g.he[prevboundaryindex0].id, g.he[heindex0].id);
+        g.set_prev_next_boundary(g.he[heindex0].id, g.he[nextboundaryindex0].id);
+        g.set_prev_next_boundary(g.he[nextboundaryindex0].id, g.he[prevboundaryindex0].id);
         return (-1);
     }
     return (-1);
@@ -5415,8 +5495,16 @@ int MC::attempt_unbind_triangle(System &g, int heid0)
     int nextindex0 = g.heidtoindex[g.he[heindex0].nextid];
     int previndex0 = g.heidtoindex[g.he[heindex0].previd];
 
-    if (g.is_boundary(g.he[nextindex0].opid) > 0 || g.is_boundary(g.he[previndex0].opid > 0))
+    if (g.is_boundary(g.he[nextindex0].opid) > 0 || g.is_boundary(g.he[previndex0].opid) > 0)
         return -1; // sound not be the last triangle
+
+    // The 3 vertices of this triangle must not already touch an existing,
+    // separate boundary loop -- opening this triangle assumes it creates an
+    // isolated 3-edge hole. If it shares a vertex with another hole, the two
+    // loops would need to be merged (distinct boundary_index values), which
+    // this move does not handle.
+    if (g.is_vboundary(g.he[heindex0].vin) > 0 || g.is_vboundary(g.he[heindex0].vout) > 0 || g.is_vboundary(g.he[previndex0].vin) > 0)
+        return -1;
 
     //if (g.he[previndex0].previd!=g.he[heindex0].nextid_boundary) return -1; // should be infront of a wedge
 
@@ -5435,14 +5523,17 @@ int MC::attempt_unbind_triangle(System &g, int heid0)
         g.he[previndex0].boundary_index = bi;
         g.he[nextindex0].boundary_index = bi;
 
-        g.set_prev_next_boundary(g.he[previndex0].id, g.he[heindex0].id);
-        g.set_prev_next_boundary(g.he[heindex0].id, g.he[nextindex0].id);
-        g.set_prev_next_boundary(g.he[nextindex0].id, g.he[previndex0].id);
-
+        // set_prev_next_boundary requires its arguments to already read as
+        // boundary edges (is_boundary() true), so nextid/previd must be
+        // nulled out before linking them into the boundary chain.
         g.he[heindex0].nextid = -1;
         g.he[heindex0].previd = -1;
         g.he[nextindex0].previd = -1;
         g.he[previndex0].nextid = -1;
+
+        g.set_prev_next_boundary(g.he[previndex0].id, g.he[heindex0].id);
+        g.set_prev_next_boundary(g.he[heindex0].id, g.he[nextindex0].id);
+        g.set_prev_next_boundary(g.he[nextindex0].id, g.he[previndex0].id);
 
         g.Nboundary++;
         g.Nboundarylast++;

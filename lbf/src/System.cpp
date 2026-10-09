@@ -2610,8 +2610,8 @@ double System::new_vertex_edge_and_move(int heindex0, double *newv, int etnew,gs
 
 int System::new_vertex_edge(int heindex0, double *newv, int etnew)
 {
-	
-	double *tempvec, *fvec , *fvecx , *fvecy; 
+
+	double *tempvec, *fvec , *fvecx , *fvecy;
 
 	tempvec = new double[3];
 	fvec = new double[3];
@@ -5770,46 +5770,6 @@ void make_initial_from_file(System &g, std::string filename)
     }
 
 }
-
-int check_bind_triangle(System &g) //
-{
-	//cout << "in attempt_bind_triangle heid0 " << heid0 << endl;
-	for (vector<int>::iterator it = g.boundary.begin(); it != g.boundary.end(); ++it)
-	{
-		int heid0 = *it;
-		int heindex0 = g.heidtoindex[heid0]; // this edge on boundary
-		/* if triangle */
-		//int bi=g.he[heindex0].boundary_index;
-
-		//cout << "in attempt_bind_triangle heindex0 " << heindex0 << endl;
-
-		int nextboundaryid0 = g.he[heindex0].nextid_boundary;
-		int prevboundaryid0 = g.he[heindex0].previd_boundary;
-
-		//std::cout << "nextid: " << nextboundaryid0 << " previd: " << prevboundaryid0 << std::endl;
-
-		if (nextboundaryid0 == -1 || prevboundaryid0 == -1)
-		{
-			cout << "error in attempt_bind_triangle heindex0 " << endl;
-			
-			exit(-1);
-		}
-
-		//int nextboundaryindex0=g.heidtoindex[nextboundaryid0]; // next of heid0
-		int prevboundaryindex0 = g.heidtoindex[prevboundaryid0]; // prev of heid0
-		if (g.he[prevboundaryindex0].previd == g.he[heindex0].nextid_boundary)
-		{
-
-			g.set_prev_next(heid0, prevboundaryid0, nextboundaryid0);
-			g.set_prev_next(prevboundaryid0, nextboundaryid0, heid0);
-			g.set_prev_next(nextboundaryid0, heid0, prevboundaryid0);
-			g.Nboundary--;
-			return 1;
-		}
-	}
-	return 0;
-}
-
 
 void System::set_obs(Observer &anObs) {
 
