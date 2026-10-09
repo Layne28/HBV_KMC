@@ -1,0 +1,2 @@
+./hbv_kmc CAM_high_salt_high_freq.in 1 seeds.txt
+./hbv_kmc CAM_high_salt_high_freq.in 30 seeds.txt

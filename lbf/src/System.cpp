@@ -238,6 +238,11 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	if(theParams.is_key("kappa0")) kappa[0] = std::stod(theParams.get_value("kappa0"));
 	//Angle spring constant
 	if(theParams.is_key("kappaPhi0")) kappaPhi[0] = std::stod(theParams.get_value("kappaPhi0"));
+    //Bond lengths
+	if(theParams.is_key("l0")) l0[0] = std::stod(theParams.get_value("l0"));
+	if(theParams.is_key("l1")) l0[1] = std::stod(theParams.get_value("l1"));
+	if(theParams.is_key("l2")) l0[2] = std::stod(theParams.get_value("l2"));
+	if(theParams.is_key("l3")) l0[3] = std::stod(theParams.get_value("l3"));
 	//Bond angles
 	if(theParams.is_key("phi0")) phi0[0] = std::stod(theParams.get_value("phi0"));
 	if(theParams.is_key("phi1")) phi0[1] = std::stod(theParams.get_value("phi1"));
