@@ -28,7 +28,6 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	phi0 = nullptr;
 	dmu = 0;
 	dG_apoholo = 0;
-	dG_apoholo_sol = 0;
 	ks0 = 0;
 	kd0 = 0;
 	dg01 = 0;
@@ -36,6 +35,8 @@ System::System(ParamDict &theParams, gsl_rng *&the_rg) {
 	dg33 = 0;
 	dg00 = 0;
 	dgother = 0;
+	dgintraAB = 0;
+	dgintraCD = 0;
 
 	//Initialize other defaults
 	initialize(4); //4 is the default number of types
@@ -259,6 +260,8 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	//Overall binding free energy (aka "LnK")
 	if(theParams.is_key("gb0")) gb0 = std::stod(theParams.get_value("gb0"));
 	if(theParams.is_key("dg")) dg = std::stod(theParams.get_value("dg"));
+	if(theParams.is_key("dgintraAB")) dgintraAB = std::stod(theParams.get_value("dgintraAB"));
+	if(theParams.is_key("dgintraCD")) dgintraCD = std::stod(theParams.get_value("dgintraCD"));
 	//Chemical potentials
 	if(theParams.is_key("muCD")) mu[0] = std::stod(theParams.get_value("muCD"));
 	if(theParams.is_key("dmu")) dmu = std::stod(theParams.get_value("dmu"));
@@ -283,9 +286,6 @@ void System::do_paramdict_assign(ParamDict &theParams) {
 	}
 	//Conformational (apo/holo) free energy difference, G_holo - G_apo
 	if(theParams.is_key("dG_apoholo")) dG_apoholo = std::stod(theParams.get_value("dG_apoholo"));
-	//Solution-phase G_holo - G_apo; mu is the chemical potential of all solution dimers (apo + holo)
-	dG_apoholo_sol = dG_apoholo;
-	if(theParams.is_key("dG_apoholo_sol")) dG_apoholo_sol = std::stod(theParams.get_value("dG_apoholo_sol"));
 	//if(theParams.is_key("muAB")) mu[1] = std::stod(theParams.get_value("muAB"));
 	//Drug chemical potential
 	if(theParams.is_key("mudrug")) mudrug = std::stod(theParams.get_value("mudrug"));
@@ -778,9 +778,18 @@ void System::update_boundary()
 					it->boundary_index = 0;
 				}
 				//cout << " in update boundary - wrong boundary boundary index"<<endl; cout << " heid" << it->id <<" boundary_index " << it->boundary_index <<endl; exit(-1);}
-				//update boundary_nextindex
-				it->nextid_boundary = v[vidtoindex[it->vout]].heboundaryoutid;
-				he[heidtoindex[v[vidtoindex[it->vout]].heboundaryoutid]].previd_boundary = it->id;
+				//update boundary_nextindex, but only where the link is missing or
+				//invalid (e.g. a freshly built seed): rebuilding it from
+				//heboundaryoutid assumes a single simple loop and scrambles a
+				//pinched remnant whose links the moves have already set
+				int nb = it->nextid_boundary;
+				bool valid = (nb != -1 && heidtoindex[nb] >= 0 && he[heidtoindex[nb]].vin == it->vout &&
+							  is_boundary(nb) > 0 && (it->nextid == -1 || it->nextid == nb));
+				if (!valid)
+				{
+					it->nextid_boundary = v[vidtoindex[it->vout]].heboundaryoutid;
+					he[heidtoindex[v[vidtoindex[it->vout]].heboundaryoutid]].previd_boundary = it->id;
+				}
 			}
 			else
 			{
@@ -908,6 +917,39 @@ void System::update_boundary()
 	update_normals();
 	update_excluder_top();
 	Nsurf = boundary.size();
+
+	// Nboundary is the number of boundary loops (holes/open edges). The moves
+	// keep it up to date incrementally, but a restart file does not store it
+	// and some moves only adjust it approximately, so recount it here from
+	// the boundary links. A closed structure counts as 1, the value
+	// initialize() starts from. Left unchanged if the links are incomplete.
+	int nloops = count_boundary_loops();
+	if (nloops >= 0)
+		Nboundary = (nloops > 0) ? nloops : 1;
+}
+
+/* Number of boundary loops, found by following nextid_boundary around every
+ * boundary halfedge; -1 if a link is missing or does not close. */
+int System::count_boundary_loops()
+{
+	std::set<int> seen;
+	int nloops = 0;
+	for (vector<int>::iterator it = boundary.begin(); it != boundary.end(); ++it)
+	{
+		if (seen.count(*it))
+			continue;
+		int x = *it;
+		int steps = 0;
+		do
+		{
+			seen.insert(x);
+			x = he[heidtoindex[x]].nextid_boundary;
+			if (x < 0 || heidtoindex[x] < 0 || ++steps > Nhe)
+				return -1;
+		} while (x != *it);
+		nloops++;
+	}
+	return nloops;
 }
 
 int System::is_vboundary(int vid)
@@ -1325,6 +1367,10 @@ int System::delete_vertex(int vid0)
 	v.erase(v.begin() + vindex0);
 	vidtoindex[vid0] = -1;
 	Nv--;
+	// drop it from the other vertices' neighbor lists, which would otherwise
+	// keep a dangling id until their next update_neigh_vertex
+	for (vector<VTX>::iterator it = v.begin(); it != v.end(); ++it)
+		it->vneigh.erase(std::remove(it->vneigh.begin(), it->vneigh.end(), (int)vid0), it->vneigh.end());
 
 	return 1;
 }
@@ -3347,6 +3393,68 @@ int System::find_overlap_g(int vid0)
 	return 1;
 }
 
+/* True if the two halfedges, or the triangles do_intersect builds on them
+ * (their next's far vertex), touch a pair of split partners (see
+ * update_split_partners): elements that met at the vertex before it was split
+ * still meet at the same point, so check_overlap_g does not test them
+ * against each other until the pair has separated. */
+bool System::split_joined(int heindex0, int heindex1)
+{
+	auto corners = [&](int heindex, int *c) {
+		c[0] = he[heindex].vin;
+		c[1] = he[heindex].vout;
+		c[2] = (he[heindex].nextid != -1) ? he[heidtoindex[he[heindex].nextid]].vout : -1;
+	};
+	int c0[3], c1[3];
+	corners(heindex0, c0);
+	corners(heindex1, c1);
+	for (int p : c0)
+	{
+		if (p == -1)
+			continue;
+		long long int q = v[vidtoindex[p]].split_partner;
+		if (q == -1)
+			continue;
+		for (int r : c1)
+			if (r != -1 && q == r)
+				return true;
+	}
+	return false;
+}
+
+/* A vertex split (MC::attempt_split_vertex) leaves the two new vertices at
+ * the same position, so the pair is exempt from check_overlap_g until normal
+ * vertex moves have separated them. Called once per sweep, on an accepted
+ * configuration: a pair stops being exempt as soon as both vertices pass the
+ * full overlap check without the exemption. */
+void System::update_split_partners()
+{
+	for (int i = 0; i < Nv; i++)
+	{
+		long long int p = v[i].split_partner;
+		if (p == -1)
+			continue;
+		if (p < 0 || p >= Nvlast || vidtoindex[p] == -1)
+		{
+			v[i].split_partner = -1;
+			continue;
+		}
+		int pindex = vidtoindex[p];
+		if (v[pindex].split_partner != v[i].vid)
+		{
+			v[i].split_partner = -1;
+			continue;
+		}
+		v[i].split_partner = -1;
+		v[pindex].split_partner = -1;
+		if (check_overlap_g(v[i].vid) < 0 || check_overlap_g(p) < 0)
+		{
+			v[i].split_partner = p;
+			v[pindex].split_partner = v[i].vid;
+		}
+	}
+}
+
 int System::check_overlap_g(int vid0)
 {
 	if (Nhe < 22)
@@ -3388,6 +3496,10 @@ int System::check_overlap_g(int vid0)
 			exit(-1);
 			
 		}
+		else if (v[vindex0].split_partner == v[vindex1].vid)
+		{
+			continue; // just split apart: exempt until update_split_partners clears it
+		}
 		else
 		{
 			//if (veclen(v[vindex0].co,v[vindex1].co )<.1) { return -1;} // check vertex vertx overlap
@@ -3409,7 +3521,7 @@ int System::check_overlap_g(int vid0)
 				for (vector<int>::iterator it = v[vindex0].hein.begin(); it != v[vindex0].hein.end(); it++) //this vertex hein s
 				{
 					int heid0 = *it;
-					if (heid0 != he[heindex1].id && heid0 != he[heindex1].opid)
+					if (heid0 != he[heindex1].id && heid0 != he[heindex1].opid && !split_joined(heidtoindex[heid0], heindex1))
 					{
 						//if (is_boundary(heid0)>0){ heid0=he[heidtoindex[heid1]].opid;} //why?
 						int heindex0 = heidtoindex[heid0];

@@ -143,6 +143,9 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
             cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
             cout << "#########  APO/HOLO CHANGED " << solver.apoholochanged << " ##############" << endl;
             cout << "#########  INTERIOR DIMER REMOVED " << solver.interiorremoved << " ADDED " << solver.interioradded << " ##############" << endl;
+            cout << "#########  HOLE MERGE DIMER REMOVED " << solver.holemerged << " ##############" << endl;
+            cout << "#########  FRAGMENTS RELEASED " << solver.fragmentreleased << " (" << solver.fragmentdimers << " dimers) ##############" << endl;
+            cout << "#########  VERTEX SPLITS " << solver.vertexsplit << " ##############" << endl;
             cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
             cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
             cout << "#########  FUSION " << fusion << " ##############" << endl;
@@ -367,6 +370,9 @@ void LabBench::run(int nstps, std::string subdir, int config_freq, int therm_fre
     cout << "#########  TYPE CHANGED " << typechanged << " ##############" << endl;
     cout << "#########  APO/HOLO CHANGED " << solver.apoholochanged << " ##############" << endl;
     cout << "#########  INTERIOR DIMER REMOVED " << solver.interiorremoved << " ADDED " << solver.interioradded << " ##############" << endl;
+    cout << "#########  HOLE MERGE DIMER REMOVED " << solver.holemerged << " ##############" << endl;
+    cout << "#########  FRAGMENTS RELEASED " << solver.fragmentreleased << " (" << solver.fragmentdimers << " dimers) ##############" << endl;
+    cout << "#########  VERTEX SPLITS " << solver.vertexsplit << " ##############" << endl;
     cout << "#########  WEDGE FUSION " << wedgefusion << " ##############" << endl;
     cout << "#########  WEDGE FISSION " << wedgefission << " ##############" << endl;
     cout << "#########  FUSION " << fusion << " ##############" << endl;

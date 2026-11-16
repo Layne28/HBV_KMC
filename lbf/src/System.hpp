@@ -4,6 +4,7 @@
 #define SYSTEM_HPP
 
 #include <vector>
+#include <set>
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -67,6 +68,7 @@ struct VTX
 	int doubleboundary; //id of halfedge that is between two boundaries
 
 	vector<int> vneigh; // vector of neighbor vertices
+	long long int split_partner = -1; // vertex this one was split from (MC::attempt_split_vertex); the pair is exempt from check_overlap_g until update_split_partners finds them clear of each other
 };
 typedef struct HE HE;
 typedef struct VTX VTX;
@@ -113,11 +115,12 @@ public:
 	int all_neigh;
 	double gb0;
 	double dg;
+	double dgintraAB; //free energy difference between WT and xlinked intradimer interface
+	double dgintraCD; //free energy difference between WT and xlinked intradimer interface
 	double mudimer;
 	double *mu;
 	double dmu;
 	double dG_apoholo; // conformational free energy difference G_holo - G_apo, controls apo/holo equilibrium for every edge
-	double dG_apoholo_sol; // G_holo - G_apo for dimers in solution (defaults to dG_apoholo); sets the solution apo/holo balance that mu refers to
 	double mudrug;
 	double ks0;
 	double kd0;
@@ -218,6 +221,9 @@ public:
 	int do_intersect(int heid1, int heid2);
 	int remove_neigh(int vid0, int removevid);
 	int check_overlap_g(int vid0);
+	void update_split_partners();
+	int count_boundary_loops();
+	bool split_joined(int heindex0, int heindex1);
 	int find_overlap_g(int vid0);
 	int find_overlap_all();
 	int check_inside_overlap(int heid0);

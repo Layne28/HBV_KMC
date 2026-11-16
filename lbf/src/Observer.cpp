@@ -62,7 +62,7 @@ void Observer::dump_parameters(System &theSys, std::string subdir)
     {
         fprintf(fi, "bond type %d l0_apo %.4f l0_holo %.4f\n", i, theSys.l0[i], theSys.l0h[i]);
     }
-    fprintf(fi, "dG_apoholo %.4f dG_apoholo_sol %.4f\n", theSys.dG_apoholo, theSys.dG_apoholo_sol);
+    fprintf(fi, "dG_apoholo %.4f\n", theSys.dG_apoholo);
 
     fflush(fi);
     fclose(fi);

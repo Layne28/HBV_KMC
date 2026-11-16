@@ -20,6 +20,14 @@ MC::MC(System &g, ParamDict &theParams, gsl_rng *&the_rg)
     if(theParams.is_key("allow_bridge_moves")) allow_bridge_moves = std::stoi(theParams.get_value("allow_bridge_moves"));
     if(theParams.is_key("allow_bridge_add_moves")) allow_bridge_add_moves = std::stoi(theParams.get_value("allow_bridge_add_moves"));
     if(theParams.is_key("allow_interior_moves")) allow_interior_moves = std::stoi(theParams.get_value("allow_interior_moves"));
+    if(theParams.is_key("allow_addition_moves")) allow_addition_moves = std::stoi(theParams.get_value("allow_addition_moves"));
+    if(theParams.is_key("allow_merge_moves")) allow_merge_moves = std::stoi(theParams.get_value("allow_merge_moves"));
+    if (allow_merge_moves && allow_addition_moves == 1)
+        std::cout << "WARNING: allow_merge_moves has no reverse addition move, so with allow_addition_moves = 1 the dynamics do not satisfy detailed balance" << std::endl;
+    if(theParams.is_key("allow_release_moves")) allow_release_moves = std::stoi(theParams.get_value("allow_release_moves"));
+    if(theParams.is_key("allow_split_moves")) allow_split_moves = std::stoi(theParams.get_value("allow_split_moves"));
+    if (allow_release_moves && allow_addition_moves == 1)
+        std::cout << "WARNING: allow_release_moves has no reverse addition move, so with allow_addition_moves = 1 the dynamics do not satisfy detailed balance" << std::endl;
 
     //***Set RNG***
     rg = the_rg;
@@ -273,6 +281,8 @@ void MC::sweep(System &g)
     /*** Attempt MC moves at prescribed frequencies ***/
     /**************************************************/
 
+    g.update_split_partners();
+
     /*** Vertex relaxation ***/
     move_vertices(g);
 
@@ -289,7 +299,7 @@ void MC::sweep(System &g)
     // don't set allow_trimer_moves are completely unaffected.
     if (allow_trimer_moves)
     {
-        if (gsl_rng_uniform(rg) < ks0)
+        if (allow_addition_moves == 1 && gsl_rng_uniform(rg) < ks0)
         {
             int tt = attempt_add_trimer_dimer(g);
             if (tt > 0)
@@ -318,7 +328,7 @@ void MC::sweep(System &g)
      * default for the same reason as allow_trimer_moves. ***/
     if (allow_bridge_moves)
     {
-        if (allow_bridge_add_moves && gsl_rng_uniform(rg) < ks0)
+        if (allow_addition_moves == 1 && allow_bridge_add_moves && gsl_rng_uniform(rg) < ks0)
         {
             int tt = attempt_add_monomer_bridge(g);
             if (tt > 0)
@@ -383,7 +393,7 @@ void MC::sweep(System &g)
             if (attempt_remove_interior_dimer(g) > 0)
                 interiorremoved++;
         }
-        else
+        else if (allow_addition_moves == 1)
         {
             if (attempt_add_interior_dimer(g) > 0)
                 interioradded++;
@@ -391,9 +401,51 @@ void MC::sweep(System &g)
         g.update_boundary();
     }
 
+    /*** Hole merge: remove a dimer separating a hole from another hole or
+     * from a face (see attempt_remove_merge_dimer). Removal only. Like the
+     * release below, it never leaves less than a single triangle
+     * (only_triangle_left). ***/
+    if (allow_merge_moves && g.Nhe > 6)
+    {
+        g.update_boundary();
+        if (g.boundary.size() > 0 && gsl_rng_uniform(rg) < ks0 * g.Nsurf)
+        {
+            if (attempt_remove_merge_dimer(g) > 0)
+                holemerged++;
+            g.update_boundary();
+        }
+    }
+
+    /*** Fragment release: a piece attached to the rest by a single vertex
+     * leaves in one step (see attempt_release_fragment). Removal only. ***/
+    if (allow_release_moves && g.Nhe > 6)
+    {
+        g.update_boundary();
+        if (gsl_rng_uniform(rg) < ks0 * g.Nv)
+        {
+            if (attempt_release_fragment(g) > 0)
+                fragmentreleased++;
+            g.update_boundary();
+        }
+    }
+
+    /*** Vertex split: separate dimers that meet at a vertex without a
+     * contact, or across a single contact outside a complete triangle (see
+     * attempt_split_vertex). ***/
+    if (allow_split_moves && g.Nhe > 6)
+    {
+        g.update_boundary();
+        if (gsl_rng_uniform(rg) < ks0 * g.Nv)
+        {
+            if (attempt_split_vertex(g) > 0)
+                vertexsplit++;
+            g.update_boundary();
+        }
+    }
+
     /*** Add monomers/dimers ***/
     ps_attempt = ks0 * g.Nsurf;
-    if (gsl_rng_uniform(rg) < ps_attempt)
+    if (allow_addition_moves == 1 && gsl_rng_uniform(rg) < ps_attempt)
     {
         //std::cout << "Attempt to add monomer/dimer" << std::endl;
         //std::cout << ps_attempt << std::endl;
@@ -428,7 +480,7 @@ void MC::sweep(System &g)
     }
 
     //Attempt to add drug-bound dimer
-    if (gsl_rng_uniform(rg) < ps_attempt)
+    if (allow_addition_moves == 1 && gsl_rng_uniform(rg) < ps_attempt)
     {
         int ind = gsl_rng_uniform_int(rg, g.boundary.size());
         int e = g.boundary[ind];
@@ -684,6 +736,7 @@ void MC::sweep(System &g)
     double d_attempt = kd0 * g.Nhe;
 
     /*** Drug binding ***/
+    //if (allow_addition_moves == 1 && gsl_rng_uniform(rg) < d_attempt)
     if (gsl_rng_uniform(rg) < d_attempt)
     {
 
@@ -2238,6 +2291,8 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
             if(debug_dimer_drug_removal==1) std::cout << "Drug bound to heop or next op. Skipping" << std::endl;
             return (-1);
         }
+        if (creates_dangling_dimer(g, {heid0, g.he[heindex0].opid}, std::set<int>(), -1))
+            return (-1); // never leave a vertex with a single dimer
 
         double de = -(g.stretch_energy(heindex0));
         int nextboundary0 = g.he[heindex0].nextid_boundary;
@@ -2391,6 +2446,8 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
                 return (-1);
             }
+            if (creates_dangling_dimer(g, {heid0, g.he[heindex0].opid, heid_prev_boundary, g.he[g.heidtoindex[heid_prev_boundary]].opid}, std::set<int>(), -1))
+                return (-1); // never leave a vertex with a single dimer
 
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
@@ -2581,6 +2638,8 @@ int MC::attempt_remove_monomer_dimer(System &g, int heid0) /* 102220 THIS NEEDS 
                 std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
                 return (-1);
             }
+            if (creates_dangling_dimer(g, {heid0, g.he[heindex0].opid, heid_next_boundary, g.he[g.heidtoindex[heid_next_boundary]].opid}, std::set<int>(), -1))
+                return (-1); // never leave a vertex with a single dimer
 
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
@@ -2884,6 +2943,8 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
                 return (-1);
             }
+            if (creates_dangling_dimer(g, {heid0, g.he[heindex0].opid, heid_prev_boundary, g.he[g.heidtoindex[heid_prev_boundary]].opid}, std::set<int>(), -1))
+                return (-1); // never leave a vertex with a single dimer
 
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
@@ -3059,6 +3120,8 @@ int MC::attempt_remove_monomer_dimer_drug(System &g, int heid0) /* 102220 THIS N
                 std::cout << "Rejecting attempt to remove dimer where vertex is shared by others" << std::endl;
                 return (-1);
             }
+            if (creates_dangling_dimer(g, {heid0, g.he[heindex0].opid, heid_next_boundary, g.he[g.heidtoindex[heid_next_boundary]].opid}, std::set<int>(), -1))
+                return (-1); // never leave a vertex with a single dimer
 
             //gbb+= g.find_gbb(optype,opnexttype,opprevtype); //whole triangle
             gbb += g.find_dg(optype, opnexttype, g.he[g.heidtoindex[nextopid0]].din);
@@ -3289,6 +3352,13 @@ int MC::attempt_wedge_fusion(System &g)
         vidi = g.he[heindex_next].vin;
         vidj = g.he[heindex_prev].vout;
     }
+    // A dangling dimer's free end (a vertex with a single dimer) has that
+    // dimer's own two halfedges on either side of its boundary gap, which the
+    // boundary relinking below does not handle (it left broken links that
+    // made update_boundary exit). Such ends are removed by
+    // attempt_remove_merge_dimer instead.
+    if (vertex_degree(g, vidi) < 2 || vertex_degree(g, vidj) < 2)
+        return -1;
     int heid_next = g.he[heindex_next].id;
     int heid_prev = g.he[heindex_prev].id;
 
@@ -3999,6 +4069,9 @@ int MC::attempt_wedge_fission(System &g)
         }
     }
 
+    // never leave a vertex with a single dimer (rejected like an overlap)
+    if (vertex_degree(g, newvid1) < 2 || vertex_degree(g, newvid2) < 2)
+        overlapflag = 1;
     if (gsl_rng_uniform(rg) < crit && overlapflag == -1)
     {
         std::cout << "wedge fission accepted added vid " << newvid1 << " " << newvid2 << endl;
@@ -4492,6 +4565,21 @@ int MC::attempt_change_edge_type(System &g, int heid0)
     }
 }
 
+/* Intradimer free energy of a holo edge relative to apo, for its
+ * quasi-equivalent type: dgintraCD for types 0/3, dgintraAB for types 1/2. */
+double MC::intradimer_free_energy(System &g, int heindex)
+{
+    int type = g.he[heindex].type;
+    return (type == 0 || type == 3) ? g.dgintraCD : g.dgintraAB;
+}
+
+/* Free energy of the holo state of an edge relative to apo: dG_apoholo plus
+ * the intradimer term. Used by the apo/holo switch. */
+double MC::holo_free_energy(System &g, int heindex)
+{
+    return g.dG_apoholo + intradimer_free_energy(g, heindex);
+}
+
 /* Attempt to switch the apo/holo conformational state of an edge (both
  * halfedges of the pair, which always carry the same state). This is
  * independent of the AB/CD quasi-equivalent type (g.he[].type), so the
@@ -4508,8 +4596,10 @@ int MC::attempt_switch_apo_holo(System &g, int heid0)
     bool oldholo = g.he[heindex0].holo;
     bool newholo = !oldholo;
 
-    double mu_old = oldholo ? -g.dG_apoholo : 0.0;
-    double mu_new = newholo ? -g.dG_apoholo : 0.0;
+    double dgholo = holo_free_energy(g, heindex0);
+
+    double mu_old = oldholo ? -dgholo : 0.0;
+    double mu_new = newholo ? -dgholo : 0.0;
 
     double estretch_old = 0.5 * (g.stretch_energy(heindex0) + g.stretch_energy(heopindex0));
     g.he[heindex0].holo = newholo;
@@ -4530,23 +4620,11 @@ int MC::attempt_switch_apo_holo(System &g, int heid0)
     }
 }
 
-/* g.mu is the chemical potential of all solution dimers, with apo and holo in
- * equilibrium (G_holo - G_apo = dG_apoholo_sol). Bound-state energies are
- * measured relative to apo, so the reservoir chemical potential of a dimer in a
- * given conformation, on that same scale, is mu - T ln(1 + exp(-dG_apoholo_sol/T)).
- * This returns the per-dimer correction T ln(1 + exp(-dG_apoholo_sol/T)) >= 0,
- * added to de for every dimer taken from solution (and subtracted on removal). */
-double MC::solution_conf_free_energy(System &g)
-{
-    double x = -g.dG_apoholo_sol / g.T;
-    return g.T * (std::max(x, 0.0) + log1p(exp(-fabs(x)))); // overflow-safe T ln(1 + e^x)
-}
-
 /* Apo/holo state of dimers added by the add moves. Each new edge (given by one
  * of its halfedge ids; the opposite is set too) is proposed apo or holo with
  * probability 1/2. Call this after the edges exist but before their stretch
  * energy is evaluated. Returns the conformational free energy of the new edges
- * relative to the solution reservoir (see conf_free_energy), which must be added
+ * (see conf_free_energy), which must be added
  * to the move's de, and sets proposal_factor = 2^n, which must multiply the
  * acceptance criterion to cancel the 1/2 selection probability (the reverse
  * removal move is deterministic in the state). */
@@ -4554,34 +4632,34 @@ double MC::propose_new_edge_states(System &g, const std::vector<int> &heids, dou
 {
     double dg_conf = 0;
     proposal_factor = 1;
-    double dg_sol = solution_conf_free_energy(g);
     for (int heid : heids)
     {
-        dg_conf += dg_sol;
         int heindex = g.heidtoindex[heid];
         bool holo = (gsl_rng_uniform(rg) < 0.5);
         g.he[heindex].holo = holo;
         g.he[g.heidtoindex[g.he[heindex].opid]].holo = holo;
         if (holo)
-            dg_conf += g.dG_apoholo;
+            dg_conf += intradimer_free_energy(g, heindex);
         proposal_factor *= 2;
     }
     return dg_conf;
 }
 
-/* Conformational free energy of the given edges (one halfedge id per edge),
- * relative to the solution reservoir: dG_apoholo per holo edge plus the
- * solution-phase term per edge. Removal moves subtract this from de; it is the
- * same quantity propose_new_edge_states adds for the reverse addition. */
+/* Conformational free energy of the given edges (one halfedge id per edge):
+ * the intradimer term (dgintraAB/CD) per holo edge. dG_apoholo is not counted:
+ * a dimer keeps its apo/holo state when it leaves or joins the structure, so
+ * dG_apoholo only affects switching (attempt_switch_apo_holo), and mu is the
+ * reservoir chemical potential of a dimer in either state. Removal moves
+ * subtract this from de; it is the same quantity propose_new_edge_states adds
+ * for the reverse addition. */
 double MC::conf_free_energy(System &g, const std::vector<int> &heids)
 {
     double dg_conf = 0;
-    double dg_sol = solution_conf_free_energy(g);
     for (int heid : heids)
     {
-        dg_conf += dg_sol;
-        if (g.he[g.heidtoindex[heid]].holo)
-            dg_conf += g.dG_apoholo;
+        int heindex = g.heidtoindex[heid];
+        if (g.he[heindex].holo)
+            dg_conf += intradimer_free_energy(g, heindex);
     }
     return dg_conf;
 }
@@ -4676,6 +4754,13 @@ int MC::attempt_fusion(System &g)
         vidi = g.he[heindex_next].vin;
         vidj = g.he[heindex_prev].vout;
     }
+    // A dangling dimer's free end (a vertex with a single dimer) has that
+    // dimer's own two halfedges on either side of its boundary gap, which the
+    // boundary relinking below does not handle (it left broken links that
+    // made update_boundary exit). Such ends are removed by
+    // attempt_remove_merge_dimer instead.
+    if (vertex_degree(g, vidi) < 2 || vertex_degree(g, vidj) < 2)
+        return -1;
     heid_next = g.he[heindex_next].id;
     heid_prev = g.he[heindex_prev].id;
 
@@ -5233,7 +5318,7 @@ int MC::attempt_fission(System &g)
     delete[] tempv;
 
     // now transfer edges of the heid_prev side
-    std::cout << endl;
+    //std::cout << endl;
     //std::cout << "in fission now transfer edges of the heid_prev side" <<endl;
     int yid = heid_prev;
     int yidopid = g.he[g.heidtoindex[yid]].opid;
@@ -5264,7 +5349,7 @@ int MC::attempt_fission(System &g)
         }
         yid = g.he[g.heidtoindex[yidopid]].previd;
     }
-    std::cout << endl;
+    //std::cout << endl;
     //now transfer edges of the heid_next side
     //std::cout << "in fission now transfer edges of the heid_next side" <<endl;
 
@@ -5293,15 +5378,15 @@ int MC::attempt_fission(System &g)
         }
     }
 
-    std::cout << "in fission now delete the vertex" <<endl;
+    //std::cout << "in fission now delete the vertex" <<endl;
 
     g.delete_vertex(vid0);
-    std::cout << "done" << std::endl;
+    //std::cout << "done" << std::endl;
     //std::cout << "in fission now update boundary" <<endl;
     //g.update_boundary(); should not update the boundary before
     // calculate energy
 
-    std::cout << "in fission now update index " <<endl;
+    //std::cout << "in fission now update index " <<endl;
     ////std::cout << "in fission test vid outs "<<endl;
     /*
     for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
@@ -5371,10 +5456,13 @@ int MC::attempt_fission(System &g)
         }
     }
 
+    // never leave a vertex with a single dimer (rejected like an overlap)
+    if (vertex_degree(g, newvid_prev) < 2 || vertex_degree(g, newvid_next) < 2)
+        overlapflag = 1;
     if ((gsl_rng_uniform(rg) < crit && overlapflag == -1) || g.Test_assembly == 1)
     {
         //std::cout << "fission accepted added vid " << newvid_prev << " " << newvid_next << endl;
-        std::cout << "fission accepted opeened heid_prev" << heid_prev << " and heid_next" << heid_next << endl;
+        //std::cout << "fission accepted opeened heid_prev" << heid_prev << " and heid_next" << heid_next << endl;
 
         //std::cout << "#############" << endl;
         /* read the boundary index from one side */
@@ -5425,12 +5513,12 @@ int MC::attempt_fission(System &g)
                 vecupdate.push_back(*it);
             }
         }
-        std::cout << "fission not accepted " << endl; // now move things back to what it was
+        //std::cout << "fission not accepted " << endl; // now move things back to what it was
 
         g.add_vertex(vtxi->co);
         //update added neighbors
 
-        std::cout << "vtxi is added back -- updating indices g.Nvlast " << g.Nvlast  << " g.Nv "<< g.Nv <<endl;
+        //std::cout << "vtxi is added back -- updating indices g.Nvlast " << g.Nvlast  << " g.Nv "<< g.Nv <<endl;
 
         int lastindex = g.vidtoindex[g.Nvlast - 1];
 
@@ -5486,7 +5574,7 @@ int MC::attempt_fission(System &g)
 
         g.update_neigh_vertex_and_neigh(g.Nvlast - 1);
 
-        std::cout << "done updating index and neigh vertices" << std::endl;
+        //std::cout << "done updating index and neigh vertices" << std::endl;
 
 
         /*
@@ -5966,9 +6054,9 @@ bool MC::interior_dimer_closed_ok(System &g, int heid0)
     int c = g.he[n1index].vout, d = g.he[n2index].vout;
     if (c == d || c == a || c == b || d == a || d == b)
         return false;
-    // the hole must not touch any other boundary loop (no loop merging)
-    if (g.is_vboundary(a) > 0 || g.is_vboundary(b) > 0 || g.is_vboundary(c) > 0 || g.is_vboundary(d) > 0)
-        return false;
+    // The new 4-edge loop may touch existing holes at a, b, c and d (those
+    // vertices are then shared by several loops); its own links are set
+    // directly, so this needs no restriction.
     // no drug bound at any of the 4 contacts made/broken
     if (g.he[eindex].din != 0 || g.he[opindex].din != 0 || g.he[n1index].din != 0 || g.he[n2index].din != 0)
         return false;
@@ -6194,6 +6282,894 @@ int MC::attempt_add_interior_dimer(System &g)
     g.update_neigh_vertex(a);
     g.update_neigh_vertex(b);
     return -1;
+}
+
+/***** Hole merge ******************************************************/
+/* True if removing the halfedges in `removed` (both halves of each dimer)
+ * and moving the outgoing halfedges in `moved` (with their opposites' far
+ * ends) to a new vertex `to` would leave some vertex with a single dimer that
+ * does not have one now. The assembly moves never make such a vertex, so no
+ * move is allowed to. */
+bool MC::creates_dangling_dimer(System &g, const std::set<int> &removed, const std::set<int> &moved, int to)
+{
+    std::map<int, int> deg_now, deg_after;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        deg_now[it->vin]++;
+        if (!removed.count(it->id))
+            deg_after[moved.count(it->id) ? to : it->vin]++;
+    }
+    for (std::map<int, int>::iterator it = deg_after.begin(); it != deg_after.end(); ++it)
+        if (it->second == 1 && !(it->first != to && deg_now[it->first] == 1))
+            return true;
+    return false;
+}
+
+/* True if the halfedges not in `removed` are exactly one complete triangle.
+ * Removal moves may take the structure down to a single triangle but no
+ * further: the sweep treats Nhe == 6 as a triangle, and every move assumes
+ * Nhe >= 6. Contacts broken by the removal only involve removed halfedges, so
+ * a face made entirely of remaining halfedges survives it. */
+bool MC::only_triangle_left(System &g, const std::set<int> &removed)
+{
+    if (g.Nhe - (int)removed.size() != 6)
+        return false;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        int n1 = it->nextid;
+        if (removed.count(it->id) || n1 == -1 || removed.count(n1))
+            continue;
+        int n2 = g.he[g.heidtoindex[n1]].nextid;
+        if (n2 != -1 && !removed.count(n2) && g.he[g.heidtoindex[n2]].nextid == it->id)
+            return true;
+    }
+    return false;
+}
+
+/* Number of dimers at vertex vid. */
+int MC::vertex_degree(System &g, int vid)
+{
+    int n = 0;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+        if (it->vin == vid)
+            n++;
+    return n;
+}
+
+/* Around the vertex heid points into, the outgoing halfedge that follows heid
+ * on its left: its bonded next if it has one, otherwise the next halfedge
+ * along its boundary loop. Following succ_he traces a complete face or a
+ * boundary loop. -1 if the boundary links are missing. */
+int MC::succ_he(System &g, int heid)
+{
+    int heindex = g.heidtoindex[heid];
+    return g.he[heindex].nextid != -1 ? g.he[heindex].nextid : g.he[heindex].nextid_boundary;
+}
+
+/* Inverse of succ_he. */
+int MC::pred_he(System &g, int heid)
+{
+    int heindex = g.heidtoindex[heid];
+    return g.he[heindex].previd != -1 ? g.he[heindex].previd : g.he[heindex].previd_boundary;
+}
+
+/* The face or boundary loop through heid (following succ_he), starting with
+ * heid. Empty if the links are broken. */
+std::vector<int> MC::he_cycle(System &g, int heid)
+{
+    std::vector<int> cycle;
+    int x = heid;
+    do
+    {
+        cycle.push_back(x);
+        x = succ_he(g, x);
+        if (x == -1 || (int)cycle.size() > g.Nhe)
+            return std::vector<int>();
+    } while (x != heid);
+    return cycle;
+}
+
+/* Remove a dimer e = a->b bordering a hole, breaking every contact the dimer
+ * has (up to 4: at a and at b, on either side). Its two sides are cycles
+ * (faces or boundary loops):
+ *   hole | hole, different loops: the two holes merge into one loop
+ *                (Nboundary decreases by 1);
+ *   face | hole: the face opens into the hole; its other two edges stay
+ *                bonded to each other as a wedge at the apex;
+ *   pendant:     the same loop on both sides because a has no other dimer;
+ *                the dimer leaves together with vertex a.
+ * (face | face is attempt_remove_interior_dimer.) Any other dimer with the
+ * same loop on both sides is never removed: that would split the structure
+ * into two pieces.
+ *
+ * Relinking: with P = pred(e) and S = succ(op) at a, and Pb = pred(op) and
+ * Sb = succ(e) at b, removing the edge links P -> S and Pb -> Sb along the
+ * boundary (only Pb -> Sb for a pendant, whose P and S are op and e).
+ *
+ * Proposal: a boundary halfedge picked uniformly (either half of a hole|hole
+ * dimer, the hole-side half of a face|hole dimer). Removal only, with no
+ * reverse insertion move, so the acceptance min(1, exp(-df/T)) is not paired
+ * with anything; df is counted as in the other removal moves (elastic,
+ * contacts, -mu and the conformational terms). Only meaningful when addition
+ * moves are off. */
+int MC::attempt_remove_merge_dimer(System &g)
+{
+    if (g.boundary.size() == 0)
+        return -1;
+    int heid0 = g.boundary[gsl_rng_uniform_int(rg, g.boundary.size())];
+    int eindex = g.heidtoindex[heid0];
+    int opid = g.he[eindex].opid;
+    int opindex = g.heidtoindex[opid];
+    int a = g.he[eindex].vin, b = g.he[eindex].vout;
+
+    int deg_a = 0, deg_b = 0;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        if (it->vin == a)
+            deg_a++;
+        if (it->vin == b)
+            deg_b++;
+    }
+    std::vector<int> cyc_e = he_cycle(g, heid0);
+    std::vector<int> cyc_op = he_cycle(g, opid);
+    if (cyc_e.empty() || cyc_op.empty())
+        return -1;
+    bool pendant = false;
+    if (std::find(cyc_e.begin(), cyc_e.end(), opid) != cyc_e.end())
+    {
+        // same loop on both sides: only a pendant dimer (exactly one free end)
+        if ((deg_a == 1) == (deg_b == 1))
+            return -1;
+        pendant = true;
+        if (deg_b == 1)
+        {
+            // orient so that a is the free end
+            std::swap(heid0, opid);
+            std::swap(eindex, opindex);
+            std::swap(a, b);
+            std::swap(cyc_e, cyc_op);
+        }
+    }
+    bool op_hole = (g.is_boundary(opid) > 0);
+    if (!op_hole && cyc_op.size() != 3)
+        return -1; // op must then lie in a complete triangular face
+    if (g.Nhe - 2 < 6 || (g.Nhe - 2 == 6 && !only_triangle_left(g, {heid0, opid})))
+        return -1; // keep at least a triangle (see only_triangle_left)
+
+    int P = pred_he(g, heid0);  // into a, before e
+    int S = succ_he(g, opid);   // out of a, after op
+    int Pb = pred_he(g, opid);  // into b, before op
+    int Sb = succ_he(g, heid0); // out of b, after e
+    if (P == -1 || S == -1 || Pb == -1 || Sb == -1)
+        return -1;
+
+    // contacts broken (x -> y carries the drug state of y)
+    bool c_Pe = (g.he[eindex].previd != -1);
+    bool c_eSb = (g.he[eindex].nextid != -1);
+    bool c_Pbop = (g.he[opindex].previd != -1);
+    bool c_opS = (g.he[opindex].nextid != -1);
+    int Pindex = g.heidtoindex[P], Sindex = g.heidtoindex[S];
+    int Pbindex = g.heidtoindex[Pb], Sbindex = g.heidtoindex[Sb];
+    if (g.he[eindex].din != 0 || g.he[opindex].din != 0 || (c_eSb && g.he[Sbindex].din != 0) || (c_opS && g.he[Sindex].din != 0))
+        return -1; // no drug bound to the dimer or at its contacts
+    if (creates_dangling_dimer(g, {heid0, opid}, std::set<int>(), -1))
+        return -1; // never leave a vertex with a single dimer
+
+    // halfedges whose elastic terms change (see local_elastic_energy)
+    std::vector<int> ring = {P, S, Pb, Sb};
+    for (int h : {P, S, Pb, Sb})
+        ring.push_back(g.he[g.heidtoindex[h]].opid);
+    std::sort(ring.begin(), ring.end());
+    ring.erase(std::unique(ring.begin(), ring.end()), ring.end());
+    ring.erase(std::remove(ring.begin(), ring.end(), heid0), ring.end());
+    ring.erase(std::remove(ring.begin(), ring.end(), opid), ring.end());
+    std::vector<int> all = ring;
+    all.push_back(heid0);
+    all.push_back(opid);
+
+    double e_before = local_elastic_energy(g, all);
+    int etype = g.he[eindex].type, optype = g.he[opindex].type;
+    double gbb = 0;
+    if (c_Pe)
+        gbb += g.find_dg(g.he[Pindex].type, etype, g.he[eindex].din);
+    if (c_eSb)
+        gbb += g.find_dg(etype, g.he[Sbindex].type, g.he[Sbindex].din);
+    if (c_Pbop)
+        gbb += g.find_dg(g.he[Pbindex].type, optype, g.he[opindex].din);
+    if (c_opS)
+        gbb += g.find_dg(optype, g.he[Sindex].type, g.he[Sindex].din);
+    double dg_conf = conf_free_energy(g, {heid0});
+
+    // tentatively break the contacts (e and op are excluded from the after-sum)
+    if (c_Pe)
+        g.he[Pindex].nextid = -1;
+    if (c_eSb)
+        g.he[Sbindex].previd = -1;
+    if (c_Pbop)
+        g.he[Pbindex].nextid = -1;
+    if (c_opS)
+        g.he[Sindex].previd = -1;
+    double e_after = local_elastic_energy(g, ring);
+
+    double df = (e_after - e_before) - gbb + g.mu[etype] - dg_conf;
+    double crit = exp(-df / g.T);
+    if (!(gsl_rng_uniform(rg) < crit))
+    {
+        if (c_Pe)
+            g.he[Pindex].nextid = heid0;
+        if (c_eSb)
+            g.he[Sbindex].previd = heid0;
+        if (c_Pbop)
+            g.he[Pbindex].nextid = opid;
+        if (c_opS)
+            g.he[Sindex].previd = opid;
+        return -1;
+    }
+
+    // the merged loop keeps e's boundary index
+    int bi = g.he[eindex].boundary_index;
+    std::vector<int> merged;
+    for (int h : cyc_e)
+        if (h != heid0)
+            merged.push_back(h);
+    if (!pendant)
+    {
+        for (int h : cyc_op)
+            if (h != opid)
+                merged.push_back(h);
+    }
+    merged.erase(std::remove(merged.begin(), merged.end(), opid), merged.end());
+    g.he[eindex].nextid = -1;
+    g.he[eindex].previd = -1;
+    g.he[opindex].nextid = -1;
+    g.he[opindex].previd = -1;
+    if (g.delete_edge(heid0) < 0)
+    {
+        std::cout << "ERROR in attempt_remove_merge_dimer: could not delete edge" << std::endl;
+        std::exit(-1);
+    }
+    std::vector<int> neigh_a; // vertices that may list a as a non-bonded neighbor
+    if (pendant)
+    {
+        neigh_a = g.v[g.vidtoindex[a]].vneigh;
+        g.delete_vertex(a);
+    }
+    g.update_index();
+    for (int h : merged)
+        g.he[g.heidtoindex[h]].boundary_index = bi;
+    if (!pendant)
+        g.set_prev_next_boundary(P, S);
+    g.set_prev_next_boundary(Pb, Sb);
+    // boundary links follow the bonds that remain (e.g. the wedge left by an opened face)
+    for (int h : merged)
+    {
+        int hindex = g.heidtoindex[h];
+        if (g.he[hindex].nextid != -1)
+            g.set_prev_next_boundary(h, g.he[hindex].nextid);
+    }
+    if (op_hole && !pendant)
+        g.Nboundary--;
+
+    std::vector<int> vids = {b, g.he[g.heidtoindex[Sb]].vout};
+    if (!pendant)
+    {
+        vids.push_back(a);
+        vids.push_back(g.he[g.heidtoindex[S]].vout);
+    }
+    for (int vid : vids)
+    {
+        int vindex = g.vidtoindex[vid];
+        g.update_geometry_vertex(vindex);
+        g.update_normals_vertex(vindex);
+        g.update_excluder_top_vertex(vindex);
+    }
+    if (!pendant)
+        g.update_neigh_vertex(a);
+    g.update_neigh_vertex(b);
+    for (int vid : neigh_a)
+        if (g.vidtoindex[vid] != -1)
+            g.update_neigh_vertex(vid);
+    return 1;
+}
+
+/***** Removing a group of dimers ***************************************/
+/* Used by attempt_release_fragment. F holds both halfedges of every dimer in the group.
+ * Contacts inside the group stay (the group leaves together); contacts
+ * between the group and the rest are broken. Around each vertex the group
+ * touches, a remaining halfedge whose successor is in F is relinked to the
+ * next remaining one in rotational order (x -> succ(op(x)) skips F). */
+bool MC::group_prepare(System &g, const std::set<int> &F, GroupRemoval &gr)
+{
+    gr = GroupRemoval();
+    std::set<int> touched_v;
+    for (int h : F)
+    {
+        int hi = g.heidtoindex[h];
+        touched_v.insert(g.he[hi].vin);
+        touched_v.insert(g.he[hi].vout);
+    }
+    std::set<int> kept_v; // touched vertices that keep a dimer
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        if (F.count(it->id))
+            continue;
+        if (touched_v.count(it->vin) || touched_v.count(it->vout))
+            gr.ring.push_back(it->id);
+        if (touched_v.count(it->vin))
+            kept_v.insert(it->vin);
+        int x = succ_he(g, it->id);
+        if (x == -1)
+            return false;
+        if (!F.count(x))
+            continue;
+        int guard = 0;
+        while (x != -1 && F.count(x) && guard++ <= g.Nhe)
+            x = succ_he(g, g.he[g.heidtoindex[x]].opid);
+        if (x == -1 || F.count(x))
+            return false;
+        gr.new_succ[it->id] = x;
+    }
+    for (int v : touched_v)
+        if (!kept_v.count(v))
+            gr.vfree.push_back(v);
+    gr.kept_v.assign(kept_v.begin(), kept_v.end());
+
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        if (it->nextid != -1 && F.count(it->id) != F.count(it->nextid))
+        {
+            int nindex = g.heidtoindex[it->nextid];
+            gr.broken.push_back(std::make_pair(it->id, it->nextid));
+            gr.gbb += g.find_dg(it->type, g.he[nindex].type, g.he[nindex].din);
+        }
+    }
+
+    // boundary loops through the group or the relinked halfedges (they are replaced)
+    std::set<int> old_loops;
+    std::vector<int> through(F.begin(), F.end());
+    for (auto &kv : gr.new_succ)
+        through.push_back(kv.first);
+    for (int h : through)
+    {
+        std::vector<int> c = he_cycle(g, h);
+        if (c.empty())
+            return false;
+        bool loop = false;
+        for (int x : c)
+        {
+            int xi = g.heidtoindex[x];
+            if (g.he[xi].nextid == -1 || g.he[xi].previd == -1)
+                loop = true;
+        }
+        if (loop)
+            old_loops.insert(*std::min_element(c.begin(), c.end()));
+    }
+    gr.old_loops = old_loops.size();
+    return true;
+}
+
+/* Break (do = true) or restore the contacts between the group and the rest. */
+void MC::group_break_contacts(System &g, const GroupRemoval &gr, bool do_break)
+{
+    for (auto &c : gr.broken)
+    {
+        g.he[g.heidtoindex[c.first]].nextid = do_break ? -1 : c.second;
+        g.he[g.heidtoindex[c.second]].previd = do_break ? -1 : c.first;
+    }
+}
+
+/* Delete the group (its dimers and the vertices left with none) and relink the
+ * boundary; the contacts to the rest must already be broken. Every boundary
+ * loop through a relinked halfedge gets a fresh boundary index. */
+void MC::group_commit(System &g, const std::set<int> &F, const GroupRemoval &gr)
+{
+    std::map<int, int> succ_after;
+    std::vector<std::vector<int>> new_loops;
+    for (auto &kv : gr.new_succ)
+    {
+        int h = kv.first;
+        if (succ_after.count(h))
+            continue;
+        std::vector<int> c;
+        bool loop = false;
+        int x = h;
+        do
+        {
+            int xi = g.heidtoindex[x];
+            std::map<int, int>::const_iterator ns = gr.new_succ.find(x);
+            int nx = (ns != gr.new_succ.end()) ? ns->second : succ_he(g, x);
+            succ_after[x] = nx;
+            c.push_back(x);
+            if (g.he[xi].nextid == -1 || g.he[xi].previd == -1)
+                loop = true;
+            x = nx;
+            if (x == -1 || (int)c.size() > g.Nhe)
+            {
+                std::cout << "ERROR in group_commit: broken boundary links" << std::endl;
+                std::exit(-1);
+            }
+        } while (x != h);
+        if (loop)
+            new_loops.push_back(c);
+    }
+    int bi = -1;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+        bi = std::max(bi, it->boundary_index);
+    for (auto &c : new_loops)
+    {
+        bi++;
+        for (int x : c)
+            g.he[g.heidtoindex[x]].boundary_index = bi;
+    }
+
+    std::vector<int> neigh_update;
+    for (int vid : gr.vfree)
+    {
+        std::vector<int> &vn = g.v[g.vidtoindex[vid]].vneigh;
+        neigh_update.insert(neigh_update.end(), vn.begin(), vn.end());
+    }
+    for (int h : F)
+    {
+        int hi = g.heidtoindex[h];
+        g.he[hi].nextid = -1;
+        g.he[hi].previd = -1;
+    }
+    for (int h : F)
+    {
+        if (g.heidtoindex[h] == -1)
+            continue; // already deleted with its opposite
+        if (g.delete_edge(h) < 0)
+        {
+            std::cout << "ERROR in group_commit: could not delete edge" << std::endl;
+            std::exit(-1);
+        }
+        g.update_index();
+    }
+    for (int vid : gr.vfree)
+    {
+        g.delete_vertex(vid);
+        g.update_index();
+    }
+
+    for (auto &c : new_loops)
+        for (int x : c)
+            g.set_prev_next_boundary(x, succ_after[x]);
+    g.Nboundary += (int)new_loops.size() - gr.old_loops;
+
+    std::set<int> vids(gr.kept_v.begin(), gr.kept_v.end());
+    for (int h : gr.ring)
+    {
+        int hi = g.heidtoindex[h];
+        vids.insert(g.he[hi].vin);
+        vids.insert(g.he[hi].vout);
+    }
+    for (int vid : vids)
+    {
+        int vindex = g.vidtoindex[vid];
+        g.update_geometry_vertex(vindex);
+        g.update_normals_vertex(vindex);
+        g.update_excluder_top_vertex(vindex);
+    }
+    for (int vid : gr.kept_v)
+        g.update_neigh_vertex(vid);
+    for (int vid : neigh_update)
+        if (g.vidtoindex[vid] != -1)
+            g.update_neigh_vertex(vid);
+}
+
+/***** Fragment release ************************************************/
+/* Release a piece of the structure that is attached to the rest through a
+ * single vertex v0 (e.g. a triangle left hanging by one corner once the shell
+ * around it has been removed). The piece leaves in one step, breaking only
+ * the contacts across v0 between it and the rest; its internal contacts leave
+ * intact with it.
+ *
+ * Proposal: a vertex v0 picked uniformly. Cutting the structure at v0 splits
+ * its dimers into connected pieces; the largest stays and one of the others
+ * with at least 2 dimers is picked uniformly (a single dangling dimer is left
+ * to attempt_remove_merge_dimer).
+ *
+ * df = (elastic energy after - before) - (contacts broken across v0), so the
+ * piece's own strain is released and it is not charged mu or any
+ * conformational term. Removal only, accepted with min(1, exp(-df/T)).
+ *
+ * The relinking and deletion are done by group_prepare / group_commit. */
+int MC::attempt_release_fragment(System &g)
+{
+    if (g.Nv < 3)
+        return -1;
+    int v0 = g.v[gsl_rng_uniform_int(rg, g.Nv)].vid;
+
+    // connected pieces of the structure with v0 cut out, labelled by vertex
+    std::map<int, int> piece_of;
+    int npiece = 0;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        if (it->vin != v0 || piece_of.count(it->vout))
+            continue;
+        std::vector<int> stack = {it->vout};
+        piece_of[it->vout] = npiece;
+        while (!stack.empty())
+        {
+            int u = stack.back();
+            stack.pop_back();
+            for (vector<HE>::iterator jt = g.he.begin(); jt != g.he.end(); ++jt)
+            {
+                if (jt->vin == u && jt->vout != v0 && !piece_of.count(jt->vout))
+                {
+                    piece_of[jt->vout] = npiece;
+                    stack.push_back(jt->vout);
+                }
+            }
+        }
+        npiece++;
+    }
+    if (npiece < 2)
+        return -1;
+
+    // halfedges per piece (an edge belongs to the piece of its endpoint other than v0)
+    std::vector<int> nhe(npiece, 0);
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        int u = (it->vin != v0) ? it->vin : it->vout;
+        if (!piece_of.count(u))
+            return -1; // not connected to v0: should not happen
+        nhe[piece_of[u]]++;
+    }
+    int keep = std::max_element(nhe.begin(), nhe.end()) - nhe.begin();
+    std::vector<int> cand;
+    for (int p = 0; p < npiece; p++)
+        if (p != keep && nhe[p] >= 4)
+            cand.push_back(p);
+    if (cand.empty())
+        return -1;
+    int piece = cand[gsl_rng_uniform_int(rg, cand.size())];
+
+    std::set<int> F; // the piece's halfedges
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+    {
+        int u = (it->vin != v0) ? it->vin : it->vout;
+        if (piece_of[u] == piece)
+        {
+            F.insert(it->id);
+            if (it->din != 0)
+                return -1; // no drug bound to the piece
+        }
+    }
+    if (g.Nhe - (int)F.size() < 6 || (g.Nhe - (int)F.size() == 6 && !only_triangle_left(g, F)))
+        return -1; // keep at least a triangle (see only_triangle_left)
+    if (creates_dangling_dimer(g, F, std::set<int>(), -1))
+        return -1; // never leave a vertex with a single dimer
+
+    GroupRemoval gr;
+    if (!group_prepare(g, F, gr))
+        return -1;
+    std::vector<int> all = gr.ring;
+    all.insert(all.end(), F.begin(), F.end());
+    double e_before = local_elastic_energy(g, all);
+    group_break_contacts(g, gr, true); // the piece is excluded from the after-sum
+    double e_after = local_elastic_energy(g, gr.ring);
+
+    double df = (e_after - e_before) - gr.gbb;
+    double crit = exp(-df / g.T);
+    if (!(gsl_rng_uniform(rg) < crit))
+    {
+        group_break_contacts(g, gr, false);
+        return -1;
+    }
+    group_commit(g, F, gr);
+    fragmentdimers += (int)F.size() / 2;
+    return 1;
+}
+
+/***** Vertex split ****************************************************/
+/* Split a vertex v0 into two, moving one group of its dimers to a new vertex
+ * v1 at the same position. A vertex is only where dimer ends meet: dimers
+ * that have no contact with each other there do not interact, so nothing
+ * should keep them pinned together (e.g. two patches of triangles joined at
+ * one vertex, which otherwise hinge freely about it).
+ *
+ * Around v0 the dimers are ordered by rotation (succ_he); between consecutive
+ * ones is either a contact or a gap. The split cuts this rotation at two
+ * places and moves the arc between them to v1. Allowed cuts:
+ *   two gaps (no contact broken), or
+ *   one gap and one contact that is not part of a complete triangle (the
+ *   same event as attempt_fission, without its restrictions).
+ * If the rotation at v0 already consists of separate cycles, a whole cycle
+ * can also be moved with no cut at all.
+ * A split that would leave the two groups unconnected is rejected (that is a
+ * fragment, see attempt_release_fragment).
+ *
+ * Proposal: a vertex picked uniformly, then one allowed split of it picked
+ * uniformly. df = (elastic energy after - before) - (contact broken, if
+ * any); positions are unchanged, so with no contact broken df = 0. Accepted
+ * with min(1, exp(-df/T)); no reverse move is paired with it. v0 and v1
+ * start on top of each other, so they are exempt from check_overlap_g until
+ * vertex moves separate them (System::update_split_partners). */
+int MC::attempt_split_vertex(System &g)
+{
+    if (g.Nv < 3)
+        return -1;
+    int v0 = g.v[gsl_rng_uniform_int(rg, g.Nv)].vid;
+    if (g.v[g.vidtoindex[v0]].split_partner != -1)
+        return -1; // still on top of an earlier split partner
+
+    // rotation cycles: outgoing halfedges g_0, g_1, ... with g_{k+1} = succ(op(g_k));
+    // slot k lies between op(g_k) and g_{k+1}
+    std::vector<int> outs;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+        if (it->vin == v0)
+            outs.push_back(it->id);
+    if (outs.size() < 2)
+        return -1;
+    std::set<int> seen;
+    std::vector<std::vector<int>> rots;
+    for (int g0 : outs)
+    {
+        if (seen.count(g0))
+            continue;
+        std::vector<int> seq;
+        int x = g0;
+        do
+        {
+            seq.push_back(x);
+            seen.insert(x);
+            x = succ_he(g, g.he[g.heidtoindex[x]].opid);
+            if (x == -1 || g.he[g.heidtoindex[x]].vin != v0 || seq.size() > outs.size())
+                return -1;
+        } while (x != g0);
+        rots.push_back(seq);
+    }
+
+    // candidate splits: {rotation, i, j} cuts slots i and j (arc g_{i+1}..g_j
+    // moves); i = -1 moves the whole rotation cycle
+    struct Split
+    {
+        int r, i, j;
+    };
+    std::vector<Split> cands;
+    if (rots.size() > 1)
+        for (int r = 0; r < (int)rots.size(); r++)
+            cands.push_back({r, -1, -1});
+    for (int r = 0; r < (int)rots.size(); r++)
+    {
+        int n = rots[r].size();
+        if (n < 2)
+            continue;
+        std::vector<int> ok(n), contact(n);
+        for (int k = 0; k < n; k++)
+        {
+            int in = g.he[g.heidtoindex[rots[r][k]]].opid;
+            int out = rots[r][(k + 1) % n];
+            int ini = g.heidtoindex[in], outi = g.heidtoindex[out];
+            contact[k] = (g.he[ini].nextid != -1);
+            bool face = contact[k] && g.he[outi].nextid != -1 && g.he[g.heidtoindex[g.he[outi].nextid]].nextid == in;
+            ok[k] = !face && !(contact[k] && g.he[outi].din != 0);
+        }
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++)
+                if (ok[i] && ok[j] && contact[i] + contact[j] <= 1)
+                    cands.push_back({r, i, j});
+    }
+    if (cands.empty())
+        return -1;
+    Split c = cands[gsl_rng_uniform_int(rg, cands.size())];
+    std::vector<int> &rot = rots[c.r];
+    int n = rot.size();
+
+    std::vector<int> arc; // outgoing halfedges that move to v1
+    int in_i = -1, out_i = -1, in_j = -1, out_j = -1;
+    if (c.i == -1)
+        arc = rot;
+    else
+    {
+        for (int k = c.i + 1; k <= c.j; k++)
+            arc.push_back(rot[k]);
+        in_i = g.he[g.heidtoindex[rot[c.i]]].opid;
+        out_i = rot[(c.i + 1) % n];
+        in_j = g.he[g.heidtoindex[rot[c.j]]].opid;
+        out_j = rot[(c.j + 1) % n];
+    }
+    std::set<int> arcset(arc.begin(), arc.end());
+
+    // the two groups must stay connected through the rest of the structure
+    {
+        const int v1tag = -2;
+        std::map<int, std::vector<int>> adj;
+        for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+        {
+            int a = it->vin, b = it->vout;
+            if (arcset.count(it->id))
+                a = v1tag;
+            if (arcset.count(it->opid))
+                b = v1tag;
+            adj[a].push_back(b);
+        }
+        std::set<int> reached = {v0};
+        std::vector<int> stack = {v0};
+        while (!stack.empty())
+        {
+            int u = stack.back();
+            stack.pop_back();
+            for (int w : adj[u])
+                if (!reached.count(w))
+                {
+                    reached.insert(w);
+                    stack.push_back(w);
+                }
+        }
+        if (!reached.count(v1tag))
+            return -1;
+    }
+
+    // never leave a vertex with a single dimer; -2 stands for the new vertex
+    if (creates_dangling_dimer(g, std::set<int>(), arcset, -2))
+        return -1;
+
+    // contact broken at a cut, if any
+    std::vector<std::pair<int, int>> broken;
+    if (c.i != -1)
+    {
+        for (std::pair<int, int> s : {std::make_pair(in_i, out_i), std::make_pair(in_j, out_j)})
+            if (g.he[g.heidtoindex[s.first]].nextid != -1)
+                broken.push_back(s);
+    }
+    double gbb = 0;
+    for (auto &s : broken)
+    {
+        int ini = g.heidtoindex[s.first], outi = g.heidtoindex[s.second];
+        gbb += g.find_dg(g.he[ini].type, g.he[outi].type, g.he[outi].din);
+    }
+
+    // boundary loops through the cuts (they are replaced)
+    std::set<int> old_loops;
+    if (c.i != -1)
+    {
+        for (int h : {in_i, in_j})
+        {
+            std::vector<int> cyc = he_cycle(g, h);
+            if (cyc.empty())
+                return -1;
+            old_loops.insert(*std::min_element(cyc.begin(), cyc.end()));
+        }
+    }
+
+    // elastic terms that change (positions are unchanged; only contacts and
+    // boundary status at v0 change)
+    std::vector<int> ring;
+    for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+        if (it->vin == v0 || it->vout == v0)
+            ring.push_back(it->id);
+    double e_before = local_elastic_energy(g, ring);
+    for (auto &s : broken)
+    {
+        g.he[g.heidtoindex[s.first]].nextid = -1;
+        g.he[g.heidtoindex[s.second]].previd = -1;
+    }
+    double e_after = local_elastic_energy(g, ring);
+    double df = (e_after - e_before) - gbb;
+    double crit = exp(-df / g.T);
+    if (!(gsl_rng_uniform(rg) < crit))
+    {
+        for (auto &s : broken)
+        {
+            g.he[g.heidtoindex[s.first]].nextid = s.second;
+            g.he[g.heidtoindex[s.second]].previd = s.first;
+        }
+        return -1;
+    }
+
+    // new vertex on top of v0, carrying the arc
+    double co[3];
+    for (int k = 0; k < 3; k++)
+        co[k] = g.v[g.vidtoindex[v0]].co[k];
+    g.add_vertex(co);
+    int v1 = g.Nvlast - 1;
+    auto move_arc = [&](int from, int to) {
+        for (int x : arc)
+        {
+            int xi = g.heidtoindex[x];
+            int opx = g.he[xi].opid;
+            if (g.he[xi].vin == from)
+                g.he[xi].vin = to;
+            if (g.he[g.heidtoindex[opx]].vout == from)
+                g.he[g.heidtoindex[opx]].vout = to;
+            g.update_half_edge(x);
+            g.update_half_edge(opx);
+        }
+        g.update_index();
+    };
+    move_arc(v0, v1);
+    g.v[g.vidtoindex[v0]].split_partner = v1;
+    g.v[g.vidtoindex[v1]].split_partner = v0;
+    // rebuild v0's own list first: it can hold vertices deleted since it was
+    // last updated, which update_neigh_vertex_and_neigh would dereference
+    g.update_neigh_vertex(v0);
+    g.update_neigh_vertex(v1);
+    g.update_neigh_vertex_and_neigh(v0);
+    g.update_neigh_vertex_and_neigh(v1);
+
+    bool overlap = (g.check_overlap_g(v0) < 0 || g.check_overlap_g(v1) < 0);
+    std::vector<int> around;
+    for (int vid : {v0, v1})
+    {
+        std::vector<int> &vn = g.v[g.vidtoindex[vid]].vneigh;
+        around.insert(around.end(), vn.begin(), vn.end());
+    }
+    for (int vid : around)
+        if (!overlap && vid != v0 && vid != v1 && g.check_overlap_g(vid) < 0)
+            overlap = true;
+    if (overlap)
+    {
+        // undo: arc back onto v0, drop v1, restore the contacts
+        move_arc(v1, v0);
+        g.v[g.vidtoindex[v0]].split_partner = -1;
+        g.delete_vertex(v1);
+        g.update_index();
+        for (auto &s : broken)
+        {
+            g.he[g.heidtoindex[s.first]].nextid = s.second;
+            g.he[g.heidtoindex[s.second]].previd = s.first;
+        }
+        g.update_neigh_vertex(v0);
+        g.update_neigh_vertex_and_neigh(v0);
+        for (int vid : around)
+            if (vid != v0 && vid != v1 && g.vidtoindex[vid] != -1)
+                g.update_neigh_vertex(vid);
+        return -1;
+    }
+
+    // relink the boundary at the cuts: in_i -> out_j stays at v0, in_j -> out_i is at v1
+    if (c.i != -1)
+    {
+        std::map<int, int> relink = {{in_i, out_j}, {in_j, out_i}};
+        std::vector<std::vector<int>> new_loops;
+        std::set<int> done;
+        for (int h : {in_i, in_j})
+        {
+            if (done.count(h))
+                continue;
+            std::vector<int> cyc;
+            int x = h;
+            do
+            {
+                cyc.push_back(x);
+                done.insert(x);
+                x = relink.count(x) ? relink[x] : succ_he(g, x);
+                if (x == -1 || (int)cyc.size() > g.Nhe)
+                {
+                    std::cout << "ERROR in attempt_split_vertex: broken boundary links" << std::endl;
+                    std::exit(-1);
+                }
+            } while (x != h);
+            new_loops.push_back(cyc);
+        }
+        int bi = -1;
+        for (vector<HE>::iterator it = g.he.begin(); it != g.he.end(); ++it)
+            bi = std::max(bi, it->boundary_index);
+        for (auto &cyc : new_loops)
+        {
+            bi++;
+            for (int x : cyc)
+                g.he[g.heidtoindex[x]].boundary_index = bi;
+        }
+        g.set_prev_next_boundary(in_i, out_j);
+        g.set_prev_next_boundary(in_j, out_i);
+        for (auto &cyc : new_loops)
+            for (int x : cyc)
+                if (g.he[g.heidtoindex[x]].nextid != -1)
+                    g.set_prev_next_boundary(x, g.he[g.heidtoindex[x]].nextid);
+        g.Nboundary += (int)new_loops.size() - (int)old_loops.size();
+    }
+
+    for (int vid : {v0, v1})
+    {
+        int vindex = g.vidtoindex[vid];
+        g.update_geometry_vertex(vindex);
+        g.update_normals_vertex(vindex);
+        g.update_excluder_top_vertex(vindex);
+    }
+    return 1;
 }
 
 int MC::attempt_add_drug(System &g, int heid0)
